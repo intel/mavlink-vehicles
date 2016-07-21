@@ -14,92 +14,101 @@
 // limitations under the License.
 */
 
-#ifndef _MAVSERVER_HH_
-#define _MAVSERVER_HH_
+#pragma once
 
-#include <arpa/inet.h>
-#include <mavlink.h>
-#include <mutex>
-#include <thread>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <sys/types.h>
+#include <unordered_map>
 
-class MavServer
+namespace mavconn
 {
-  public:
-    MavServer(short port);
-    MavServer & operator=(const MavServer&) = delete;
-    MavServer(const MavServer&) = delete;
-    MavServer() = delete;
-    virtual ~MavServer();
 
-    // Helpers
-    void run();
-    void stop();
-    mavlink_mission_item_t
-    pose_to_waypoint_relative_alt(double x, double y, double z, double yaw);
-
-    // Vehicle Communication
-    bool is_ready();
-    int get_status();
-    bool set_mode_guided();
-    void queue_send_heartbeat_if_needed();
-    void queue_send_data(const uint8_t *data, int data_len);
-    void queue_send_cmd_long(mavlink_command_long_t mav_cmd);
-    void queue_send_waypoint(mavlink_mission_item_t mav_waypoint);
-    bool cmd_long_ack_recvd(int mav_cmd_id, int mav_result_expected);
-    bool queue_send_cmd_long_until_ack(int cmd, float p1, float p2,
-                                               float p3, float p4, float p5,
-                                               float p6, float p7, int timeout);
-
-    // State Variables
-    bool is_new_attitude = false;
-    bool is_new_heartbeat = false;
-    bool is_new_command_ack = false;
-    bool is_new_gps_raw_int = false;
-    bool is_new_local_pos_ned = false;
-    bool is_new_home_position = false;
-    bool is_new_global_pos_int = false;
-    mavlink_attitude_t get_svar_attitude();
-    mavlink_heartbeat_t get_svar_heartbeat();
-    mavlink_command_ack_t get_svar_command_ack();
-    mavlink_gps_raw_int_t get_svar_gps_raw_int();
-    mavlink_home_position_t get_svar_home_position();
-    mavlink_local_position_ned_t get_svar_local_pos_ned();
-    mavlink_global_position_int_t get_svar_global_pos_int();
-
-  private:
-    // Threading
-    bool send_recv_thread_run = false;
-    std::thread send_recv_thread;
-
-    std::mutex svar_access_mtx;
-    std::mutex data_to_send_access_mtx;
-    std::mutex attitude_svar_access_mtx;
-    std::mutex local_pos_ned_svar_access_mtx;
-
-    // Vehicle Communication
-    int sock = 0;
-    socklen_t fromlen = {0};
-    struct sockaddr_in local_addr = {0};
-    struct sockaddr_in remote_addr = {0};
-
-    int data_to_send_len = 0;
-    enum { BUFFER_LEN = 2041 };
-    uint8_t data_recv[BUFFER_LEN];
-    uint8_t data_to_send[BUFFER_LEN];
-
-    void send_recv();
-    void handle_send();
-    void handle_recv();
-    void handle_message(const mavlink_message_t *msg);
-
-    // State Variables
-    mavlink_attitude_t attitude = {0};
-    mavlink_heartbeat_t heartbeat = {0};
-    mavlink_command_ack_t command_ack = {0};
-    mavlink_gps_raw_int_t gps_raw_int = {0};
-    mavlink_home_position_t home_position = {0};
-    mavlink_local_position_ned_t local_pos_ned = {0};
-    mavlink_global_position_int_t global_pos_int = {0};
+struct state_variable {
+    std::chrono::time_point<std::chrono::system_clock> timestamp =
+        std::chrono::system_clock::from_time_t(0);
+    bool is_initialized()
+    {
+        return timestamp != std::chrono::system_clock::from_time_t(0);
+    }
 };
 
-#endif
+struct attitude : state_variable {
+    float roll;
+    float pitch;
+    float yaw;
+};
+
+struct global_pos : state_variable {
+    int32_t lat;
+    int32_t lon;
+    int32_t alt;
+};
+
+struct local_pos : state_variable {
+    float x;
+    float y;
+    float z;
+};
+
+enum class status { STANDBY, ACTIVE };
+
+enum class mode { GUIDED, OTHER };
+
+enum class arm_status { ARMED, NOT_ARMED };
+
+enum class gps_status { NO_FIX, FIX_2D_PLUS };
+
+enum class cmd_custom { HEARTBEAT, SET_MODE };
+
+class msghandler;
+
+class mavserver
+{
+  public:
+    mavserver(int socket_fd);
+    ~mavserver();
+
+    void update();
+
+    status get_status() const;
+    mode get_mode() const;
+    attitude get_attitude() const;
+    global_pos get_home_position() const;
+    local_pos get_local_position_ned() const;
+    global_pos get_global_position() const;
+    gps_status get_gps_status() const;
+
+    bool started();
+    void send_heartbeat();
+    void set_mode(mode m);
+    void arm_throttle();
+    void takeoff();
+    void rotate(double angleDeg);
+    void goto_waypoint(global_pos pos);
+
+  private:
+    mode base_mode;
+    status stat;
+    arm_status arm_stat;
+    attitude att;
+    global_pos home;
+    global_pos global;
+    local_pos local;
+    gps_status gps;
+
+    friend class msghandler;
+
+    int sock = 0;
+    std::unordered_map<int, std::chrono::time_point<std::chrono::system_clock>>
+        cmd_long_timestamps;
+    std::unordered_map<cmd_custom,
+                       std::chrono::time_point<std::chrono::system_clock>>
+        cmd_custom_timestamps;
+
+    ssize_t send_data(uint8_t *data, size_t len);
+    void send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
+                       float p5, float p6, float p7, int timeout);
+};
+}
