@@ -14,16 +14,38 @@
 // limitations under the License.
 */
 
+#pragma once
+
+#include <thread>
 #include <memory>
-#include <iostream>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 #include "mavserver.hh"
 
+namespace tests
+{
 
-using namespace mavconn;
+class simple_test
+{
 
-int main() {
-    std::shared_ptr<mavserver> mav = std::make_shared<mavserver>(14558);
-    std::cout << mav->started() << std::endl;
+  public:
+    simple_test();
+    ~simple_test();
+
+    void run();
+
+  private:
+    int sock = 0;
+    socklen_t fromlen = {0};
+    struct sockaddr_in local_addr = {0};
+	std::shared_ptr<mavconn::mavserver> mav;
+	std::thread send_recv_thread;
+	bool send_recv_thread_run = false;
+
+	void show_mav_state();
+	void update();
+
+};
 }
 
