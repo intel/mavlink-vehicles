@@ -26,12 +26,12 @@
 namespace tests
 {
 
-class simple_test
+class connection_test
 {
 
   public:
-    simple_test();
-    ~simple_test();
+    connection_test();
+    ~connection_test();
 
     void run();
 
