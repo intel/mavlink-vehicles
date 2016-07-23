@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include <iostream>
 #include <memory>
+#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
@@ -29,7 +30,7 @@
 int main()
 {
 
-    tests::simple_test st;
+    tests::connection_test st;
     st.run();
 }
 
@@ -41,17 +42,17 @@ namespace defaults
 const uint16_t mavproxy_port = 14556;
 }
 
-simple_test::simple_test()
+connection_test::connection_test()
 {
     // Socket Initialization
-    this->sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    this->sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock == -1) {
         perror("error opening socket");
         exit(EXIT_FAILURE);
     }
 
     local_addr.sin_family = AF_INET;
-    local_addr.sin_addr.s_addr = INADDR_ANY;
+    local_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     local_addr.sin_port = htons(defaults::mavproxy_port);
 
     if (bind(sock, (struct sockaddr *)&local_addr, sizeof(struct sockaddr)) ==
@@ -62,7 +63,7 @@ simple_test::simple_test()
     }
 
     // Attempt to make it non blocking
-    if (fcntl(sock, F_SETFL, O_NONBLOCK | FASYNC) < 0) {
+    if (fcntl(sock, F_SETFL, O_NONBLOCK) == -1) {
         perror("error setting socket as nonblocking");
         close(sock);
         exit(EXIT_FAILURE);
@@ -72,39 +73,45 @@ simple_test::simple_test()
     this->mav = std::make_shared<mavconn::mavserver>(sock);
 }
 
-simple_test::~simple_test()
+connection_test::~connection_test()
 {
 }
 
-void simple_test::run()
+void connection_test::run()
 {
 
     // Initialize mavconn update thread
     this->send_recv_thread_run = true;
-    this->send_recv_thread = std::thread(&simple_test::update, this);
+    this->send_recv_thread = std::thread(&connection_test::update, this);
     this->send_recv_thread.detach();
+
+    // Check if mavserver has been initialized
+    std::cout << "[connection test] " << "Waiting for mav-vehicle initialization..." << std::endl;
+    while (!this->mav->started()) {
+        continue;
+    }
+    std::cout << "[connection test] " << "mav-vehicle initialized." << std::endl;
 
     // Execute test
     while (true) {
         // Execute every once in a while only
         show_mav_state();
         std::this_thread::sleep_for(
-            std::chrono::duration<int, std::milli>(3000));
+            std::chrono::duration<int, std::milli>(1000));
     }
 }
 
-void simple_test::update()
+void connection_test::update()
 {
     while (send_recv_thread_run) {
         this->mav->update();
     }
 }
 
-void simple_test::show_mav_state()
+void connection_test::show_mav_state()
 {
 
-    // Check if mavserver has been initialized
-    if (!this->mav->started()) {
+    if(!this->mav->started()) {
         return;
     }
 
@@ -117,11 +124,11 @@ void simple_test::show_mav_state()
     // mavconn::gps_status gps = this->mav->get_gps_status();
 
     if (att.is_initialized()) {
-        std::cout << "Attitude: " << att.roll << std::endl;
+        std::cout << "[connection test] Attitude: " << att.roll << std::endl;
     }
 
     if (home.is_initialized()) {
-        std::cout << "Home: " << home.lon << std::endl;
+        std::cout << "[connection test] Home: " << home.lon << std::endl;
     }
 }
 }

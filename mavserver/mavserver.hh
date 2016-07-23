@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <unordered_map>
 
 namespace mavconn
@@ -101,12 +102,18 @@ class mavserver
     friend class msghandler;
 
     int sock = 0;
+    struct sockaddr_storage remote_addr = {0};
+    socklen_t remote_addr_len = sizeof(remote_addr);
+    std::chrono::time_point<std::chrono::system_clock>
+        remote_last_respond_time = std::chrono::system_clock::from_time_t(0);
+
     std::unordered_map<int, std::chrono::time_point<std::chrono::system_clock>>
         cmd_long_timestamps;
     std::unordered_map<cmd_custom,
                        std::chrono::time_point<std::chrono::system_clock>>
         cmd_custom_timestamps;
 
+    bool is_remote_responding() const;
     ssize_t send_data(uint8_t *data, size_t len);
     void send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
                        float p5, float p6, float p7, int timeout);
