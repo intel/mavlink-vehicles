@@ -7,4 +7,4 @@ set(CFLAGS "${CFLAGS} -Wformat -Wformat-security")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CFLAGS} ${CUSTOM_COMPILE_FLAGS}")
 
 add_executable(tests tests.cc)
-target_link_libraries(tests mavserver)
+target_link_libraries(tests mavlink_vehicles)
