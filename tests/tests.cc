@@ -128,19 +128,22 @@ void connection_test::show_mav_state()
     std::cout << "[connection test] Mode: " << (int)mod << std::endl;
 
     if (home.is_initialized()) {
-        std::cout << "[connection test] Home Position: " << home.alt << std::endl;
+        std::cout << "[connection test] Home Position: " << home.lat << ", "
+                  << home.lon << ", " << home.alt << std::endl;
     }
 
     if (att.is_initialized()) {
-        std::cout << "[connection test] Attitude: " << att.roll << std::endl;
+        std::cout << "[connection test] Attitude: " << att.roll << ", "
+                  << att.pitch << ", " << att.yaw << std::endl;
     }
 
     if (global.is_initialized()) {
-        std::cout << "[connection test] Global Position: " << global.alt << std::endl;
+        std::cout << "[connection test] Global Position: " << global.lat << ", "
+                  << global.lon << ", " << global.alt << std::endl;
     }
 
     if (local.is_initialized()) {
-        std::cout << "[connection test] Local Position: " << local.x << std::endl;
+        std::cout << "[connection test] Local Position: " << local.x << ", " << local.y << ", " << local.z << std::endl;
     }
 
     std::cout << "[connection test] Gps: " << (int)gps << std::endl;
