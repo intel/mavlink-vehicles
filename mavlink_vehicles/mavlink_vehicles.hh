@@ -19,11 +19,11 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unordered_map>
 
-namespace mavconn
+namespace mavlink_vehicles
 {
 
 struct state_variable {
@@ -66,61 +66,59 @@ enum class cmd_custom { HEARTBEAT, SET_MODE };
 
 class msghandler;
 
-class mavserver
+class mav_vehicle
 {
   public:
-    mavserver(int socket_fd);
-    ~mavserver();
+    mav_vehicle(int socket_fd);
+    ~mav_vehicle();
 
     void update();
-
-    status get_status() const;
-    arm_status get_arm_status() const;
-    mode get_mode() const;
-    attitude get_attitude();
-    global_pos_int get_home_position_int();
-    local_pos get_local_position_ned();
-    global_pos_int get_global_position_int();
-    gps_status get_gps_status() const;
-
     bool started();
+
+    mode get_mode() const;
+    status get_status() const;
+    gps_status get_gps_status() const;
+    arm_status get_arm_status() const;
+    attitude get_attitude();
+    local_pos get_local_position_ned();
+    global_pos_int get_home_position_int();
+    global_pos_int get_global_position_int();
+
+    void takeoff();
+    void arm_throttle();
     void send_heartbeat();
     void set_mode(mode m);
-    void arm_throttle();
-    void takeoff();
     void rotate(double angleDeg);
     void goto_waypoint(double lat, double lon, double alt);
 
   private:
-    mode base_mode;
     status stat;
     arm_status arm_stat;
+    gps_status gps;
+    mode base_mode;
+
     attitude att;
+    local_pos local;
     global_pos_int home;
     global_pos_int global;
-    local_pos local;
-    gps_status gps;
-
-    friend class msghandler;
 
     int sock = 0;
     struct sockaddr_storage remote_addr = {0};
-
     socklen_t remote_addr_len = sizeof(remote_addr);
-
     std::chrono::time_point<std::chrono::system_clock>
         remote_last_respond_time = std::chrono::system_clock::from_time_t(0);
+    bool is_remote_responding() const;
 
     std::unordered_map<int, std::chrono::time_point<std::chrono::system_clock>>
         cmd_long_timestamps;
-
     std::unordered_map<cmd_custom,
                        std::chrono::time_point<std::chrono::system_clock>>
         cmd_custom_timestamps;
 
-    bool is_remote_responding() const;
     ssize_t send_data(uint8_t *data, size_t len);
     void send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
                        float p5, float p6, float p7, int timeout);
+
+    friend class msghandler;
 };
 }

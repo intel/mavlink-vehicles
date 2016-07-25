@@ -14,17 +14,17 @@
 // limitations under the License.
 */
 
+#include <arpa/inet.h>
 #include <chrono>
 #include <cstdint>
 #include <fcntl.h>
 #include <iostream>
 #include <memory>
-#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
 
-#include "mavserver.hh"
+#include "mavlink_vehicles.hh"
 #include "tests.hh"
 
 int main()
@@ -69,8 +69,8 @@ connection_test::connection_test()
         exit(EXIT_FAILURE);
     }
 
-    // Instantiate mavserver
-    this->mav = std::make_shared<mavconn::mavserver>(sock);
+    // Instantiate mav_vehicle
+    this->mav = std::make_shared<mavlink_vehicles::mav_vehicle>(sock);
 }
 
 connection_test::~connection_test()
@@ -80,17 +80,19 @@ connection_test::~connection_test()
 void connection_test::run()
 {
 
-    // Initialize mavconn update thread
+    // Initialize mavlink_vehicles update thread
     this->send_recv_thread_run = true;
     this->send_recv_thread = std::thread(&connection_test::update, this);
     this->send_recv_thread.detach();
 
-    // Check if mavserver has been initialized
-    std::cout << "[connection test] " << "Waiting for mav-vehicle initialization..." << std::endl;
+    // Check if mav_vehicle has been initialized
+    std::cout << "[connection test] "
+              << "Waiting for mav-vehicle initialization..." << std::endl;
     while (!this->mav->started()) {
         continue;
     }
-    std::cout << "[connection test] " << "mav-vehicle initialized." << std::endl;
+    std::cout << "[connection test] "
+              << "mav-vehicle initialized." << std::endl;
 
     // Execute test
     while (true) {
@@ -111,17 +113,18 @@ void connection_test::update()
 void connection_test::show_mav_state()
 {
 
-    if(!this->mav->started()) {
+    if (!this->mav->started()) {
         return;
     }
 
-    mavconn::status stat = this->mav->get_status();
-    mavconn::mode mod = this->mav->get_mode();
-    mavconn::attitude att = this->mav->get_attitude();
-    mavconn::global_pos_int home = this->mav->get_home_position_int();
-    mavconn::global_pos_int global = this->mav->get_global_position_int();
-    mavconn::local_pos local = this->mav->get_local_position_ned();
-    mavconn::gps_status gps = this->mav->get_gps_status();
+    mavlink_vehicles::status stat = this->mav->get_status();
+    mavlink_vehicles::mode mod = this->mav->get_mode();
+    mavlink_vehicles::attitude att = this->mav->get_attitude();
+    mavlink_vehicles::global_pos_int home = this->mav->get_home_position_int();
+    mavlink_vehicles::global_pos_int global =
+        this->mav->get_global_position_int();
+    mavlink_vehicles::local_pos local = this->mav->get_local_position_ned();
+    mavlink_vehicles::gps_status gps = this->mav->get_gps_status();
 
     std::cout << "[connection test] Status: " << (int)stat << std::endl;
 
@@ -143,7 +146,8 @@ void connection_test::show_mav_state()
     }
 
     if (local.is_initialized()) {
-        std::cout << "[connection test] Local Position: " << local.x << ", " << local.y << ", " << local.z << std::endl;
+        std::cout << "[connection test] Local Position: " << local.x << ", "
+                  << local.y << ", " << local.z << std::endl;
     }
 
     std::cout << "[connection test] Gps: " << (int)gps << std::endl;

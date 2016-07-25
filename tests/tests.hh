@@ -16,12 +16,12 @@
 
 #pragma once
 
-#include <thread>
 #include <memory>
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
+#include <thread>
 
-#include "mavserver.hh"
+#include "mavlink_vehicles.hh"
 
 namespace tests
 {
@@ -39,13 +39,12 @@ class connection_test
     int sock = 0;
     socklen_t fromlen = {0};
     struct sockaddr_in local_addr = {0};
-	std::shared_ptr<mavconn::mavserver> mav;
-	std::thread send_recv_thread;
-	bool send_recv_thread_run = false;
+    std::shared_ptr<mavlink_vehicles::mav_vehicle> mav;
+    std::thread send_recv_thread;
+    bool send_recv_thread_run = false;
 
-	void show_mav_state();
-	void update();
-
+    void show_mav_state();
+    void update();
 };
 }
 
