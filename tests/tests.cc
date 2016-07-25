@@ -118,8 +118,8 @@ void connection_test::show_mav_state()
     mavconn::status stat = this->mav->get_status();
     mavconn::mode mod = this->mav->get_mode();
     mavconn::attitude att = this->mav->get_attitude();
-    mavconn::global_pos home = this->mav->get_home_position();
-    mavconn::global_pos global = this->mav->get_global_position();
+    mavconn::global_pos_int home = this->mav->get_home_position_int();
+    mavconn::global_pos_int global = this->mav->get_global_position_int();
     mavconn::local_pos local = this->mav->get_local_position_ned();
     mavconn::gps_status gps = this->mav->get_gps_status();
 
