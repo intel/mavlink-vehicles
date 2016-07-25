@@ -29,6 +29,7 @@ namespace mavconn
 struct state_variable {
     std::chrono::time_point<std::chrono::system_clock> timestamp =
         std::chrono::system_clock::from_time_t(0);
+    bool is_new = false;
     bool is_initialized()
     {
         return timestamp != std::chrono::system_clock::from_time_t(0);
@@ -74,11 +75,12 @@ class mavserver
     void update();
 
     status get_status() const;
+    arm_status get_arm_status() const;
     mode get_mode() const;
-    attitude get_attitude() const;
-    global_pos get_home_position() const;
-    local_pos get_local_position_ned() const;
-    global_pos get_global_position() const;
+    attitude get_attitude();
+    global_pos get_home_position();
+    local_pos get_local_position_ned();
+    global_pos get_global_position();
     gps_status get_gps_status() const;
 
     bool started();
@@ -103,12 +105,15 @@ class mavserver
 
     int sock = 0;
     struct sockaddr_storage remote_addr = {0};
+
     socklen_t remote_addr_len = sizeof(remote_addr);
+
     std::chrono::time_point<std::chrono::system_clock>
         remote_last_respond_time = std::chrono::system_clock::from_time_t(0);
 
     std::unordered_map<int, std::chrono::time_point<std::chrono::system_clock>>
         cmd_long_timestamps;
+
     std::unordered_map<cmd_custom,
                        std::chrono::time_point<std::chrono::system_clock>>
         cmd_custom_timestamps;
