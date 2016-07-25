@@ -18,9 +18,9 @@ if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/lib/)
             ./message_definitions/v1.0/common.xml)
 endif()
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/mavserver)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/mavlink_vehicles)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/lib/common)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/lib)
 
-add_subdirectory(mavserver)
+add_subdirectory(mavlink_vehicles)
 add_subdirectory(tests)
