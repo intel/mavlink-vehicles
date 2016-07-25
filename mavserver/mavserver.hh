@@ -42,7 +42,7 @@ struct attitude : state_variable {
     float yaw;
 };
 
-struct global_pos : state_variable {
+struct global_pos_int : state_variable {
     int32_t lat;
     int32_t lon;
     int32_t alt;
@@ -78,9 +78,9 @@ class mavserver
     arm_status get_arm_status() const;
     mode get_mode() const;
     attitude get_attitude();
-    global_pos get_home_position();
+    global_pos_int get_home_position_int();
     local_pos get_local_position_ned();
-    global_pos get_global_position();
+    global_pos_int get_global_position_int();
     gps_status get_gps_status() const;
 
     bool started();
@@ -89,15 +89,15 @@ class mavserver
     void arm_throttle();
     void takeoff();
     void rotate(double angleDeg);
-    void goto_waypoint(global_pos pos);
+    void goto_waypoint(double lat, double lon, double alt);
 
   private:
     mode base_mode;
     status stat;
     arm_status arm_stat;
     attitude att;
-    global_pos home;
-    global_pos global;
+    global_pos_int home;
+    global_pos_int global;
     local_pos local;
     gps_status gps;
 
