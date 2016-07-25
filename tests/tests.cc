@@ -115,21 +115,35 @@ void connection_test::show_mav_state()
         return;
     }
 
-    // mavconn::status stat = this->mav->get_status();
-    // mavconn::mode mod = this->mav->get_mode();
+    mavconn::status stat = this->mav->get_status();
+    mavconn::mode mod = this->mav->get_mode();
     mavconn::attitude att = this->mav->get_attitude();
     mavconn::global_pos home = this->mav->get_home_position();
-    // mavconn::global_pos global = this->mav->get_global_position();
-    // mavconn::local_pos local = this->mav->get_local_position();
-    // mavconn::gps_status gps = this->mav->get_gps_status();
+    mavconn::global_pos global = this->mav->get_global_position();
+    mavconn::local_pos local = this->mav->get_local_position_ned();
+    mavconn::gps_status gps = this->mav->get_gps_status();
+
+    std::cout << "[connection test] Status: " << (int)stat << std::endl;
+
+    std::cout << "[connection test] Mode: " << (int)mod << std::endl;
+
+    if (home.is_initialized()) {
+        std::cout << "[connection test] Home Position: " << home.alt << std::endl;
+    }
 
     if (att.is_initialized()) {
         std::cout << "[connection test] Attitude: " << att.roll << std::endl;
     }
 
-    if (home.is_initialized()) {
-        std::cout << "[connection test] Home: " << home.lon << std::endl;
+    if (global.is_initialized()) {
+        std::cout << "[connection test] Global Position: " << global.alt << std::endl;
     }
+
+    if (local.is_initialized()) {
+        std::cout << "[connection test] Local Position: " << local.x << std::endl;
+    }
+
+    std::cout << "[connection test] Gps: " << (int)gps << std::endl;
 }
 }
 
