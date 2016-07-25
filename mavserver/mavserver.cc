@@ -75,6 +75,7 @@ void msghandler::handle(mavserver &mav, const mavlink_message_t *msg)
         mav.local.x = local_pos_ned.x;
         mav.local.y = local_pos_ned.x;
         mav.local.z = local_pos_ned.x;
+        mav.local.is_new = true;
         return;
     }
     case MAVLINK_MSG_ID_ATTITUDE: {
@@ -84,6 +85,7 @@ void msghandler::handle(mavserver &mav, const mavlink_message_t *msg)
         mav.att.roll = attitude.roll;
         mav.att.pitch = attitude.pitch;
         mav.att.yaw = attitude.yaw;
+        mav.att.is_new = true;
         return;
     }
     case MAVLINK_MSG_ID_HOME_POSITION: {
@@ -95,6 +97,7 @@ void msghandler::handle(mavserver &mav, const mavlink_message_t *msg)
         mav.home.lat = home_position.latitude;
         mav.home.lon = home_position.longitude;
         mav.home.alt = home_position.altitude;
+        mav.home.is_new = true;
         break;
     }
     case MAVLINK_MSG_ID_GPS_RAW_INT: {
@@ -124,6 +127,7 @@ void msghandler::handle(mavserver &mav, const mavlink_message_t *msg)
         mav.global.lat = global_pos_int.lat;
         mav.global.lon = global_pos_int.lon;
         mav.global.alt = global_pos_int.alt;
+        mav.global.is_new = true;
         break;
     }
     }
@@ -171,29 +175,42 @@ status mavserver::get_status() const
     return stat;
 }
 
+arm_status mavserver::get_arm_status() const
+{
+    return arm_stat;
+}
+
 mode mavserver::get_mode() const
 {
     return base_mode;
 }
 
-attitude mavserver::get_attitude() const
+attitude mavserver::get_attitude()
 {
-    return att;
+    attitude att_copy = this->att;
+    this->att.is_new = false;
+    return att_copy;
 }
 
-global_pos mavserver::get_home_position() const
+global_pos mavserver::get_home_position()
 {
-    return home;
+    global_pos home_copy = this->home;
+    this->home.is_new = false;
+    return home_copy;
 }
 
-local_pos mavserver::get_local_position_ned() const
+local_pos mavserver::get_local_position_ned()
 {
-    return local;
+    local_pos local_copy = this->local;
+    this->local.is_new = false;
+    return local_copy;
 }
 
-global_pos mavserver::get_global_position() const
+global_pos mavserver::get_global_position()
 {
-    return global;
+    global_pos global_copy = this->global;
+    this->global.is_new = false;
+    return global_copy;
 }
 
 gps_status mavserver::get_gps_status() const
