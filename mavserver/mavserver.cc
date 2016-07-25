@@ -160,7 +160,7 @@ bool mavserver::started()
     }
 
     // Check if home position has been received
-    if (!get_home_position().is_initialized()) {
+    if (!get_home_position_int().is_initialized()) {
         // If not, request home position
         send_cmd_long(MAV_CMD_GET_HOME_POSITION, 0, 0, 0, 0, 0, 0, 0,
                       request_intervals_ms::home_position);
@@ -192,9 +192,9 @@ attitude mavserver::get_attitude()
     return att_copy;
 }
 
-global_pos mavserver::get_home_position()
+global_pos_int mavserver::get_home_position_int()
 {
-    global_pos home_copy = this->home;
+    global_pos_int home_copy = this->home;
     this->home.is_new = false;
     return home_copy;
 }
@@ -206,9 +206,9 @@ local_pos mavserver::get_local_position_ned()
     return local_copy;
 }
 
-global_pos mavserver::get_global_position()
+global_pos_int mavserver::get_global_position_int()
 {
-    global_pos global_copy = this->global;
+    global_pos_int global_copy = this->global;
     this->global.is_new = false;
     return global_copy;
 }
@@ -315,7 +315,7 @@ void mavserver::rotate(double angle_deg)
                   0, 0, 0, 2000);
 }
 
-void mavserver::goto_waypoint(global_pos pos)
+void mavserver::goto_waypoint(double lat, double lon, double alt)
 {
     // Convert global position to mav_waypoint
     mavlink_mission_item_t mav_waypoint;
@@ -324,9 +324,9 @@ void mavserver::goto_waypoint(global_pos pos)
     mav_waypoint.param2 = 0.01; // Acceptance radius in meters
     mav_waypoint.param3 = 0;    // Radius in meters to pass through wp
     mav_waypoint.param4 = 0;    // Desired yaw angle
-    mav_waypoint.x = pos.lat;
-    mav_waypoint.y = pos.lon;
-    mav_waypoint.z = pos.alt;
+    mav_waypoint.x = lat;
+    mav_waypoint.y = lon;
+    mav_waypoint.z = alt;
     mav_waypoint.seq = 0;
     mav_waypoint.command = MAV_CMD_NAV_WAYPOINT;
     mav_waypoint.target_system = defaults::target_system_id;
@@ -336,6 +336,9 @@ void mavserver::goto_waypoint(global_pos pos)
     mav_waypoint.frame = MAV_FRAME_GLOBAL_RELATIVE_ALT;
     mav_waypoint.current = 2; // Must be set as 2 for mode::GUIDED waypoint
     mav_waypoint.autocontinue = 0;
+
+    std::cout << "target position: " << mav_waypoint.x << ", " << mav_waypoint.y
+              << ", " << mav_waypoint.z << std::endl;
 
     // Encode and Send
     mavlink_message_t mav_msg;
