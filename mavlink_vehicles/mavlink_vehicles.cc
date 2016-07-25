@@ -21,11 +21,10 @@
 #include <cstdio>
 #include <iostream>
 #include <mavlink.h>
-#include <netinet/in.h> // TODO: Remove it
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include "mavserver.hh"
+#include "mavlink_vehicles.hh"
 
 #define DEBUG_MAVLINK (false)
 
@@ -56,16 +55,16 @@ const uint16_t set_mode = 1000;
 const uint16_t takeoff = 1000;
 }
 
-namespace mavconn
+namespace mavlink_vehicles
 {
 
 class msghandler
 {
   public:
-    static void handle(mavserver &mav, const mavlink_message_t *msg);
+    static void handle(mav_vehicle &mav, const mavlink_message_t *msg);
 };
 
-void msghandler::handle(mavserver &mav, const mavlink_message_t *msg)
+void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
 {
     switch (msg->msgid) {
     case MAVLINK_MSG_ID_LOCAL_POSITION_NED: {
@@ -89,7 +88,7 @@ void msghandler::handle(mavserver &mav, const mavlink_message_t *msg)
         return;
     }
     case MAVLINK_MSG_ID_HOME_POSITION: {
-        std::cout << "[mav-vehicle] "
+        std::cout << "[mav_vehicle] "
                   << "Home position received." << std::endl;
         mavlink_home_position_t home_position;
         mavlink_msg_home_position_decode(msg, &home_position);
@@ -133,17 +132,17 @@ void msghandler::handle(mavserver &mav, const mavlink_message_t *msg)
     }
 }
 
-mavserver::mavserver(int socket_fd)
+mav_vehicle::mav_vehicle(int socket_fd)
 {
     // Store socket
     this->sock = socket_fd;
 }
 
-mavserver::~mavserver()
+mav_vehicle::~mav_vehicle()
 {
 }
 
-bool mavserver::started()
+bool mav_vehicle::started()
 {
     // Wait for a remote to respond
     if (!is_remote_responding()) {
@@ -170,55 +169,55 @@ bool mavserver::started()
     return true;
 }
 
-status mavserver::get_status() const
+status mav_vehicle::get_status() const
 {
     return stat;
 }
 
-arm_status mavserver::get_arm_status() const
+arm_status mav_vehicle::get_arm_status() const
 {
     return arm_stat;
 }
 
-mode mavserver::get_mode() const
+mode mav_vehicle::get_mode() const
 {
     return base_mode;
 }
 
-attitude mavserver::get_attitude()
+attitude mav_vehicle::get_attitude()
 {
     attitude att_copy = this->att;
     this->att.is_new = false;
     return att_copy;
 }
 
-global_pos_int mavserver::get_home_position_int()
+global_pos_int mav_vehicle::get_home_position_int()
 {
     global_pos_int home_copy = this->home;
     this->home.is_new = false;
     return home_copy;
 }
 
-local_pos mavserver::get_local_position_ned()
+local_pos mav_vehicle::get_local_position_ned()
 {
     local_pos local_copy = this->local;
     this->local.is_new = false;
     return local_copy;
 }
 
-global_pos_int mavserver::get_global_position_int()
+global_pos_int mav_vehicle::get_global_position_int()
 {
     global_pos_int global_copy = this->global;
     this->global.is_new = false;
     return global_copy;
 }
 
-gps_status mavserver::get_gps_status() const
+gps_status mav_vehicle::get_gps_status() const
 {
     return gps;
 }
 
-void mavserver::send_heartbeat()
+void mav_vehicle::send_heartbeat()
 {
     using namespace std::chrono;
 
@@ -247,14 +246,14 @@ void mavserver::send_heartbeat()
                                  &mav_msg, &mav_heartbeat);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
     if (send_data(mav_data_buffer, n) == -1) {
-        std::perror("[mav-vehicle] Error sending heartbeat");
+        std::perror("[mav_vehicle] Error sending heartbeat");
     }
 
     // Update timestamp
     cmd_custom_timestamps[cmd] = system_clock::now();
 }
 
-void mavserver::set_mode(mode m)
+void mav_vehicle::set_mode(mode m)
 {
     using namespace std::chrono;
     time_point<system_clock> curr_time = system_clock::now();
@@ -296,26 +295,26 @@ void mavserver::set_mode(mode m)
     }
 }
 
-void mavserver::arm_throttle()
+void mav_vehicle::arm_throttle()
 {
     send_cmd_long(MAV_CMD_COMPONENT_ARM_DISARM, 1, 0, 0, 0, 0, 0, 0,
                   request_intervals_ms::arm_disarm);
 }
 
-void mavserver::takeoff()
+void mav_vehicle::takeoff()
 {
     send_cmd_long(MAV_CMD_NAV_TAKEOFF, 0, 0, 0, 0, 0, 0,
                   defaults::takeoff_init_alt_m, request_intervals_ms::takeoff);
 }
 
-void mavserver::rotate(double angle_deg)
+void mav_vehicle::rotate(double angle_deg)
 {
     send_cmd_long(MAV_CMD_CONDITION_YAW, fabs(angle_deg),
                   defaults::lookat_rot_speed_degps, -copysign(1, angle_deg), 1,
                   0, 0, 0, 2000);
 }
 
-void mavserver::goto_waypoint(double lat, double lon, double alt)
+void mav_vehicle::goto_waypoint(double lat, double lon, double alt)
 {
     // Convert global position to mav_waypoint
     mavlink_mission_item_t mav_waypoint;
@@ -346,7 +345,7 @@ void mavserver::goto_waypoint(double lat, double lon, double alt)
     send_data(mav_data_buffer, n);
 }
 
-ssize_t mavserver::send_data(uint8_t *data, size_t len)
+ssize_t mav_vehicle::send_data(uint8_t *data, size_t len)
 {
     if (!is_remote_responding()) {
         // Do not send any data if remote is not responding
@@ -357,8 +356,8 @@ ssize_t mavserver::send_data(uint8_t *data, size_t len)
                   (struct sockaddr *)&this->remote_addr, this->remote_addr_len);
 }
 
-void mavserver::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
-                              float p5, float p6, float p7, int timeout)
+void mav_vehicle::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
+                                float p5, float p6, float p7, int timeout)
 {
     using namespace std::chrono;
     time_point<system_clock> curr_time = system_clock::now();
@@ -391,7 +390,7 @@ void mavserver::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
                                     &mav_msg, &mav_cmd);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
     if (send_data(mav_data_buffer, n) == -1) {
-        std::perror("[mav-vehicle] Error sending cmd_long");
+        std::perror("[mav_vehicle] Error sending cmd_long");
     }
 
     // Update timestamp
@@ -405,7 +404,7 @@ void mavserver::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
         print_debug_mav("Requesting Takeoff...\n");
         break;
     case MAV_CMD_GET_HOME_POSITION:
-        std::cout << "[mav-vehicle] "
+        std::cout << "[mav_vehicle] "
                   << "Requesting Home Position." << std::endl;
         break;
     default:
@@ -413,7 +412,7 @@ void mavserver::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
     }
 }
 
-void mavserver::update()
+void mav_vehicle::update()
 {
     mavlink_message_t msg;
     mavlink_status_t status;
@@ -448,7 +447,7 @@ void mavserver::update()
 
             // Print new connection information
             struct sockaddr_in *rem = (struct sockaddr_in *)&this->remote_addr;
-            std::cout << "[mav-vehicle] Connected to vehicle "
+            std::cout << "[mav_vehicle] Connected to vehicle "
                       << inet_ntoa(rem->sin_addr) << ":" << ntohs(rem->sin_port)
                       << std::endl;
         } else {
@@ -484,7 +483,7 @@ void mavserver::update()
     }
     print_debug_mav("\n");
 }
-bool mavserver::is_remote_responding() const
+bool mav_vehicle::is_remote_responding() const
 {
     using namespace std::chrono;
     return duration_cast<milliseconds>(system_clock::now() -

@@ -11,5 +11,5 @@ set(CFLAGS "${CFLAGS} -fstack-protector-all -fPIE -fPIC -O2 -D_FORTIFY_SOURCE=2"
 set(CFLAGS "${CFLAGS} -Wformat -Wformat-security")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CFLAGS} ${CUSTOM_COMPILE_FLAGS}")
 
-add_library(mavserver mavserver.cc)
-target_link_libraries(mavserver ${CMAKE_THREAD_LIBS_INIT})
+add_library(mavlink_vehicles mavlink_vehicles.cc)
+target_link_libraries(mavlink_vehicles ${CMAKE_THREAD_LIBS_INIT})
