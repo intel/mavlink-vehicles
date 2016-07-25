@@ -73,8 +73,8 @@ void msghandler::handle(mavserver &mav, const mavlink_message_t *msg)
         mavlink_msg_local_position_ned_decode(msg, &local_pos_ned);
         mav.local.timestamp = std::chrono::system_clock::now();
         mav.local.x = local_pos_ned.x;
-        mav.local.y = local_pos_ned.x;
-        mav.local.z = local_pos_ned.x;
+        mav.local.y = local_pos_ned.y;
+        mav.local.z = local_pos_ned.z;
         mav.local.is_new = true;
         return;
     }
