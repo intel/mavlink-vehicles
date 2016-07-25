@@ -337,9 +337,6 @@ void mavserver::goto_waypoint(double lat, double lon, double alt)
     mav_waypoint.current = 2; // Must be set as 2 for mode::GUIDED waypoint
     mav_waypoint.autocontinue = 0;
 
-    std::cout << "target position: " << mav_waypoint.x << ", " << mav_waypoint.y
-              << ", " << mav_waypoint.z << std::endl;
-
     // Encode and Send
     mavlink_message_t mav_msg;
     uint8_t mav_data_buffer[defaults::send_buffer_len];
