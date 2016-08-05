@@ -8,7 +8,6 @@ between an air vehicle and a ground station.
     * MavProxy (https://github.com/Dronecode/MAVProxy)
     * Ardupilot (https://github.com/ArduPilot/ardupilot)
 
-
 ## Build and Install ##
 
 1. Make sure you have initialized and updated the Mavlink submodule at least
