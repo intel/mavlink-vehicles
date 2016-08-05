@@ -88,8 +88,9 @@ void connection_test::run()
     // Check if mav_vehicle has been initialized
     std::cout << "[connection test] "
               << "Waiting for mav-vehicle initialization..." << std::endl;
-    while (!this->mav->started()) {
-        continue;
+    while (!this->mav->is_ready()) {
+        // Continue looping while allowing other threads to run concurrently.
+        std::this_thread::yield();
     }
     std::cout << "[connection test] "
               << "mav-vehicle initialized." << std::endl;
@@ -113,7 +114,7 @@ void connection_test::update()
 void connection_test::show_mav_state()
 {
 
-    if (!this->mav->started()) {
+    if (!this->mav->is_ready()) {
         return;
     }
 

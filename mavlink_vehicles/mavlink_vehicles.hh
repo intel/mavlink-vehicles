@@ -73,7 +73,7 @@ class mav_vehicle
     ~mav_vehicle();
 
     void update();
-    bool started();
+    bool is_ready();
 
     mode get_mode() const;
     status get_status() const;
@@ -106,7 +106,8 @@ class mav_vehicle
     struct sockaddr_storage remote_addr = {0};
     socklen_t remote_addr_len = sizeof(remote_addr);
     std::chrono::time_point<std::chrono::system_clock>
-        remote_last_respond_time = std::chrono::system_clock::from_time_t(0);
+        remote_last_response_time = std::chrono::system_clock::from_time_t(0);
+    bool remote_responding = false;
     bool is_remote_responding() const;
 
     std::unordered_map<int, std::chrono::time_point<std::chrono::system_clock>>
