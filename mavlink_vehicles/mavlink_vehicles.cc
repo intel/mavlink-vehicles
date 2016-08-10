@@ -23,6 +23,8 @@
 #include <mavlink.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <vector>
+#include <algorithm>
 
 #include "mavlink_vehicles.hh"
 
@@ -33,7 +35,7 @@
 #endif
 
 #if VERBOSE
-#define print_verbose(...) printf(__VA_ARGS__)
+#define print_verbose(...) printf("[mav_vehicle] " __VA_ARGS__)
 #else
 #define print_verbose(...) ;
 #endif
@@ -49,15 +51,18 @@ const float lookat_rot_speed_degps = 90.0;
 const size_t send_buffer_len = 2041;
 const uint16_t remote_max_response_time_ms = 10000;
 const double waypoint_acceptance_radius_m = 0.01;
+const double detour_arrival_distance_m = 0.5;
 }
 
 namespace request_intervals_ms
 {
+const uint16_t request_mission_item = 3000;
 const uint16_t home_position = 3000;
 const uint16_t arm_disarm = 1000;
 const uint16_t heartbeat = 1000;
 const uint16_t set_mode = 1000;
 const uint16_t takeoff = 1000;
+const uint16_t rotate = 1000;
 }
 
 bool is_timedout(std::chrono::time_point<std::chrono::system_clock> timestamp,
@@ -78,6 +83,82 @@ bool is_same_socket(sockaddr_storage &r1, sockaddr_storage &r2)
 
 namespace mavlink_vehicles
 {
+
+namespace math
+{
+
+inline double rad2deg(double x)
+{
+    return (180.0 / M_PI) * x;
+}
+
+inline double deg2rad(double x)
+{
+    return (M_PI / 180.0) * x;
+}
+
+local_pos global_to_local_ned(global_pos_int point, global_pos_int reference)
+{
+    // Scaling factor to convert from 1e-7 degrees to meters at equator
+    // Given by: (M_PI/180)*EARTH_RADIUS_AT_EQUATOR
+    const double location_scaling_factor = 0.011131884502145034f;
+    double longitude_scaling_factor =
+        cosf(math::deg2rad(reference.lat * 1.0e-7f));
+
+    // Subtract and scale
+    local_pos local;
+    local.x = (point.lat - reference.lat) * location_scaling_factor;
+    local.y = (point.lon - reference.lon) * location_scaling_factor *
+              longitude_scaling_factor;
+    local.z = (point.alt - reference.alt) / 1000.0;
+
+    // Convert from ENU to NED
+    std::swap(local.x, local.y);
+    local.z = -local.z;
+
+    return local;
+}
+
+global_pos_int local_ned_to_global(local_pos point, global_pos_int reference)
+{
+    // Scaling factor to convert from meters to 1e-7 degrees at equator
+    // Given by: (180/M_PI)/EARTH_RADIUS_AT_EQUATOR
+    const double location_scaling_factor = 89.83204953368922;
+    double longitude_scaling_factor =
+        cosf(math::deg2rad(reference.lat * 1.0e-7f));
+
+    // Convert from NED to ENU
+    std::swap(point.x, point.y);
+    point.z = -point.z;
+
+    // Scale and sim
+    global_pos_int global;
+    global.lat = point.x * location_scaling_factor + reference.lat;
+    global.lon = point.y * location_scaling_factor / longitude_scaling_factor +
+                 reference.lon;
+    global.alt = point.z * 1000.0 + reference.alt;
+
+    return global;
+}
+
+double ground_dist(global_pos_int p1, global_pos_int p2)
+{
+    local_pos res = global_to_local_ned(p1, p2);
+    return sqrt(res.x * res.x + res.y * res.y);
+}
+
+double ground_dist(local_pos p1, local_pos p2)
+{
+    local_pos res(p2.x - p1.x, p2.y - p1.y, 0);
+    return sqrt(res.x * res.x + res.y * res.y);
+}
+
+double dist(global_pos_int p1, global_pos_int p2)
+{
+    local_pos res = global_to_local_ned(p1, p2);
+    return sqrt(res.x * res.x + res.y * res.y + res.z * res.z);
+}
+}
 
 class msghandler
 {
@@ -109,7 +190,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         return;
     }
     case MAVLINK_MSG_ID_HOME_POSITION: {
-        print_verbose("[mav_vehicle] Home position received\n");
+        print_verbose("Home position received\n");
         mavlink_home_position_t home_position;
         mavlink_msg_home_position_decode(msg, &home_position);
         mav.home.timestamp = std::chrono::system_clock::now();
@@ -129,12 +210,31 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
     case MAVLINK_MSG_ID_HEARTBEAT: {
         mavlink_heartbeat_t hb;
         mavlink_msg_heartbeat_decode(msg, &hb);
-        mav.base_mode = (hb.base_mode & MAV_MODE_FLAG_GUIDED_ENABLED)
-                            ? mode::GUIDED
-                            : mode::OTHER;
+
+        // Decode mode flag ArduCopter only supports custom_modes. The
+        // custom_mode value for each mode is described on ArduCopter's
+        // documentation.
+        mav.base_mode = mode::OTHER;
+
+        if (!(hb.base_mode & MAV_MODE_FLAG_CUSTOM_MODE_ENABLED)) {
+            break;
+        }
+
+        switch (hb.custom_mode) {
+        case 3:
+            mav.base_mode = mode::AUTO;
+            break;
+        case 4:
+            mav.base_mode = mode::GUIDED;
+            break;
+        }
+
+        // Decode arm status flag
         mav.arm_stat = (hb.base_mode & MAV_MODE_FLAG_SAFETY_ARMED)
                            ? arm_status::ARMED
                            : arm_status::NOT_ARMED;
+
+        // Decode status flag
         mav.stat = (hb.system_status == MAV_STATE_ACTIVE) ? status::ACTIVE
                                                           : status::STANDBY;
         break;
@@ -149,6 +249,104 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mav.global.is_new = true;
         break;
     }
+    case MAVLINK_MSG_ID_MISSION_REQUEST:
+    case MAVLINK_MSG_ID_MISSION_REQUEST_INT: {
+        mavlink_mission_request_t mission_request;
+        mavlink_msg_mission_request_decode(msg, &mission_request);
+
+        if (mission_request.seq >= mav.mission_items_list.size()) {
+            mav.send_mission_ack(MAV_MISSION_ERROR);
+            print_verbose("Mission seq invalid: %d\n",
+                          mission_request.seq);
+        } else {
+            global_pos_int item = mav.mission_items_list[mission_request.seq];
+            mav.send_mission_waypoint(item.lat, item.lon, item.alt,
+                                      mission_request.seq);
+        }
+        break;
+    }
+    case MAVLINK_MSG_ID_MISSION_ACK: {
+        mavlink_mission_ack_t ack;
+        mavlink_msg_mission_ack_decode(msg, &ack);
+
+        // A mission ACK has been received.  If the ack is respective to a new
+        // mission item, MAV_CMD_MISSION_START needs to be sent to continue
+        if (mav.is_sending_mission) {
+            mav.set_mode(mode::AUTO, 0);
+            mav.is_sending_mission = false;
+        }
+
+        // If a mission item has been received, it means that the mission might
+        // have changed, and so, our currently stored mission item might be
+        // outdated.
+        mav.curr_mission_item_outdated = true;
+        break;
+    }
+    case MAVLINK_MSG_ID_MISSION_CURRENT: {
+        mavlink_mission_current_t mission_current;
+        mavlink_msg_mission_current_decode(msg, &mission_current);
+
+        // If the current mission item id has changes our currently stored
+        // mission item might be outdated.
+        if (mav.curr_mission_item_id != mission_current.seq) {
+            mav.curr_mission_item_id = mission_current.seq;
+            mav.curr_mission_item_outdated = true;
+        }
+        break;
+    }
+    case MAVLINK_MSG_ID_MISSION_ITEM_INT: {
+        mavlink_mission_item_int_t mission_item;
+        mavlink_msg_mission_item_int_decode(msg, &mission_item);
+        global_pos_int global_mission_item;
+
+        // Evaluate mission frame and store mission item position with global
+        // coordinates
+        switch (mission_item.frame) {
+        case MAV_FRAME_GLOBAL: {
+            global_mission_item.lat = mission_item.x;
+            global_mission_item.lon = mission_item.y;
+            global_mission_item.alt = mission_item.z * 1e3;
+            break;
+        }
+        case MAV_FRAME_GLOBAL_RELATIVE_ALT: {
+            global_mission_item.lat = mission_item.x;
+            global_mission_item.lon = mission_item.y;
+            global_mission_item.alt = mission_item.z * 1e3 + mav.home.alt;
+            break;
+        }
+        default: {
+            // Other types of frames are not supported
+            print_verbose("Received mission item with "
+                          "unsupported frame num: %d",
+                          (int)mission_item.frame);
+            break;
+        }
+        }
+
+        // Update state variable properties
+        global_mission_item.timestamp = std::chrono::system_clock::now();
+        global_mission_item.is_new = true;
+
+        // Retrieve current mission item data converting from
+        // global-relative-alt to global
+        if (mav.curr_mission_item_id == mission_item.seq) {
+            mav.curr_mission_item_pos = global_mission_item;
+            mav.curr_mission_item_outdated = false;
+            print_verbose("Mission waypoint updated\n");
+        }
+        break;
+    }
+    case MAVLINK_MSG_ID_COMMAND_ACK: {
+        mavlink_command_ack_t command_ack;
+        mavlink_msg_command_ack_decode(msg, &command_ack);
+
+        // Check if a rotation has been initialized
+        if (command_ack.command == MAV_CMD_CONDITION_YAW &&
+            command_ack.result == MAV_RESULT_ACCEPTED) {
+            mav.rotation_enabled = true;
+            break;
+        }
+    }
     }
 }
 
@@ -156,7 +354,7 @@ mav_vehicle::mav_vehicle(int socket_fd)
 {
     // Store socket
     this->sock = socket_fd;
-    print_verbose("[mav_vehicle] Waiting for vehicle...\n");
+    print_verbose("Waiting for vehicle...\n");
 }
 
 mav_vehicle::~mav_vehicle()
@@ -230,6 +428,25 @@ global_pos_int mav_vehicle::get_global_position_int()
     return global_copy;
 }
 
+global_pos_int mav_vehicle::get_mission_waypoint()
+{
+    global_pos_int curr_mission_item_pos_copy = this->curr_mission_item_pos;
+    this->curr_mission_item_pos.is_new = false;
+    return curr_mission_item_pos_copy;
+}
+
+global_pos_int mav_vehicle::get_detour_waypoint()
+{
+    global_pos_int detour_waypoint_copy = this->detour_waypoint;
+    this->detour_waypoint.is_new = false;
+    return detour_waypoint_copy;
+}
+
+bool mav_vehicle::is_detour_enabled()
+{
+    return this->detour_enabled;
+}
+
 gps_status mav_vehicle::get_gps_status() const
 {
     return gps;
@@ -266,16 +483,36 @@ void mav_vehicle::send_heartbeat()
     cmd_custom_timestamps[cmd] = system_clock::now();
 
     if (send_data(mav_data_buffer, n) == -1) {
-        std::perror("[mav_vehicle] Error sending heartbeat");
+        print_verbose("Error sending heartbeat\n");
     }
 }
 
 void mav_vehicle::set_mode(mode m)
 {
-    using namespace std::chrono;
-    cmd_custom cmd = cmd_custom::SET_MODE;
+    set_mode(m, request_intervals_ms::set_mode);
+}
 
-    // Check if cmd_custom::SET_MODE has been sent recently
+void mav_vehicle::set_mode(mode m, int timeout)
+{
+    using namespace std::chrono;
+    cmd_custom cmd = cmd_custom::SET_MODE_GUIDED;
+
+    switch (m) {
+    case mode::GUIDED: {
+        cmd = cmd_custom::SET_MODE_GUIDED;
+        break;
+    }
+    case mode::AUTO: {
+        cmd = cmd_custom::SET_MODE_AUTO;
+        break;
+    }
+    case mode::OTHER:
+    default:
+        print_verbose("Trying to set unsupported mode");
+        return;
+    }
+
+    // Check if cmd_custom::SET_MODE_GUIDED has been sent recently
     if (cmd_custom_timestamps.count(cmd) &&
         !is_timedout(cmd_custom_timestamps[cmd],
                      request_intervals_ms::set_mode)) {
@@ -302,16 +539,79 @@ void mav_vehicle::set_mode(mode m)
         // Update timestamp
         cmd_custom_timestamps[cmd] = system_clock::now();
 
-        if (send_data(mav_data_buffer, n)) {
-            std::perror("[mav_vehicle] Error changing to mode GUIDED");
+        if (send_data(mav_data_buffer, n) == -1) {
+            print_verbose("Error changing mode to GUIDED");
             break;
         }
 
-        print_verbose("Changing to mode::GUIDED mode...\n");
+        print_verbose("Mode change to GUIDED\n");
+        break;
+    }
+    case mode::AUTO: {
+
+        // Generate set mode mavlink message
+        // Arducopter does not use the standard MAV_MODE_FLAG. It uses
+        // a custom mode instead. mode::GUIDED mode is defined as 4.
+        mavlink_message_t mav_msg;
+        mavlink_set_mode_t mav_cmd_set_mode;
+        mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
+        mav_cmd_set_mode.custom_mode = 3; // mode::GUIDED == 4
+
+        // Encode and send
+        uint8_t mav_data_buffer[defaults::send_buffer_len];
+        mavlink_msg_set_mode_encode(defaults::system_id, defaults::component_id,
+                                    &mav_msg, &mav_cmd_set_mode);
+        int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
+        send_data(mav_data_buffer, n);
+
+        // Update timestamp
+        cmd_custom_timestamps[cmd] = system_clock::now();
+
+        if (send_data(mav_data_buffer, n) == -1) {
+            print_verbose("Error changing mode to AUTO\n");
+            break;
+        }
+
+        print_verbose("Mode change to AUTO\n");
+        break;
     }
     case mode::OTHER:
         break;
     }
+}
+
+void mav_vehicle::request_mission_item(uint16_t item_id)
+{
+    cmd_custom cmd = cmd_custom::REQUEST_MISSION_ITEM;
+
+    // Check if cmd_custom::SET_MODE has been sent recently
+    if (cmd_custom_timestamps.count(cmd) &&
+        !is_timedout(cmd_custom_timestamps[cmd],
+                     request_intervals_ms::request_mission_item)) {
+        return;
+    }
+
+    // Generate mission request mavlink message
+    mavlink_message_t mav_msg;
+    mavlink_mission_request_int_t mav_mission_request;
+    mav_mission_request.target_system = defaults::target_system_id;
+    mav_mission_request.target_component = defaults::target_component_id;
+    mav_mission_request.seq = item_id;
+
+    // Encode and send
+    uint8_t mav_data_buffer[defaults::send_buffer_len];
+    mavlink_msg_mission_request_int_encode(defaults::system_id,
+                                           defaults::component_id, &mav_msg,
+                                           &mav_mission_request);
+    int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
+    if (send_data(mav_data_buffer, n) == -1) {
+        std::perror("Error requesting mission item");
+    }
+
+    // Update timestamp
+    cmd_custom_timestamps[cmd] = std::chrono::system_clock::now();
+
+    print_verbose("Requesting Mission waypoint\n");
 }
 
 void mav_vehicle::arm_throttle()
@@ -328,13 +628,133 @@ void mav_vehicle::takeoff()
 
 void mav_vehicle::rotate(double angle_deg)
 {
+    cmd_custom cmd = cmd_custom::ROTATE;
+
+    // Check if cmd_custom::ROTATE has been sent recently
+    if (cmd_custom_timestamps.count(cmd) &&
+        !is_timedout(cmd_custom_timestamps[cmd],
+                     request_intervals_ms::rotate)) {
+        return;
+    }
+
+    // We need to make sure mode is set as GUIDED in order to send the rotation
+    // command
+    set_mode(mode::GUIDED, 0);
+
+    // Set a detour waypoint on the current position
+    send_detour_waypoint(this->global);
+
+    // Send the rotation command immediately
     send_cmd_long(MAV_CMD_CONDITION_YAW, fabs(angle_deg),
                   defaults::lookat_rot_speed_degps, -copysign(1, angle_deg), 1,
-                  0, 0, 0, 2000);
+                  0, 0, 0, 0);
+
+    // Update timestamp
+    cmd_custom_timestamps[cmd] = std::chrono::system_clock::now();
+
+    print_verbose("Sending rotation command\n");
 }
 
-void mav_vehicle::goto_waypoint(double lat, double lon, double alt)
+bool mav_vehicle::is_rotating()
 {
+    return this->rotation_enabled;
+}
+
+void mav_vehicle::send_mission_waypoint(global_pos_int global)
+{
+
+    double lat = double(global.lat) / 1e7;
+    double lon = double(global.lon) / 1e7;
+    double alt = double(global.alt) / 1e3 - double(this->home.alt) / 1e3;
+
+    send_mission_waypoint(lat, lon, alt);
+}
+
+void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt)
+{
+
+    // We need to toggle from AUTO to GUIDED in order to update the mission
+    // waypoints
+    set_mode(mode::GUIDED, 0);
+
+    // Create a waypoint to be saved into the mission_items_list
+    global_pos_int wp;
+    wp.lat = lat * 1e7;
+    wp.lon = lon * 1e7;
+    wp.alt = alt * 1e3;
+
+    // Ardupilot reserves the first element of the mission commands list
+    // (seq=0) to the home position. Sending a mission item with that sequence
+    // number does not overwrite the home position. Ardupilot simply ignores
+    // it. For that reason, the first waypoint (seq=0) must be a mock waypoint
+    // that will never be used and our waypoints must start with seq=1
+    this->mission_items_list.resize(0);
+    this->mission_items_list.push_back(
+        wp); // Mock waypoint. It will be ignored.
+    this->mission_items_list.push_back(wp); // Real target waypoint.
+
+    // Send the mission_count command to Ardupilot so that it prepares to
+    // request the mission items one by one.
+    send_mission_count(2);
+
+    // TODO: These flags preferably should be set on the CMD_ACK of this
+    // command and not here.
+    this->detour_enabled = false;
+    this->rotation_enabled = false;
+
+    print_verbose("Mission started\n");
+
+    this->is_sending_mission = true;
+}
+
+void mav_vehicle::send_mission_waypoint(int32_t lat, int32_t lon, int32_t alt,
+                                        uint16_t seq)
+{
+    // Convert global position to mav_waypoint
+    mavlink_mission_item_int_t mav_waypoint;
+
+    mav_waypoint.param1 = 0;    // Hold time in decimal seconds
+    mav_waypoint.param2 = 0.01; // Acceptance radius in meters
+    mav_waypoint.param3 = 0;    // Radius in meters to pass through wp
+    mav_waypoint.param4 = 0;    // Desired yaw angle
+    mav_waypoint.x = lat;
+    mav_waypoint.y = lon;
+    mav_waypoint.z = alt / 1e3f;
+    mav_waypoint.seq = seq;
+    mav_waypoint.command = MAV_CMD_NAV_WAYPOINT;
+    mav_waypoint.target_system = defaults::target_system_id;
+    mav_waypoint.target_component = defaults::target_component_id;
+
+    // Arducopter supports only MAV_FRAME_GLOBAL_RELATIVE_ALT.
+    mav_waypoint.frame = MAV_FRAME_GLOBAL_RELATIVE_ALT;
+    mav_waypoint.current = 0; // Must be set as 2 for mode::GUIDED waypoint
+    mav_waypoint.autocontinue = 0;
+
+    // Encode and Send
+    mavlink_message_t mav_msg;
+    uint8_t mav_data_buffer[defaults::send_buffer_len];
+    mavlink_msg_mission_item_int_encode(
+        defaults::system_id, defaults::component_id, &mav_msg, &mav_waypoint);
+    int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
+    send_data(mav_data_buffer, n);
+}
+
+void mav_vehicle::send_detour_waypoint(global_pos_int global)
+{
+
+    double lat = double(global.lat) / 1e7;
+    double lon = double(global.lon) / 1e7;
+    double alt = double(global.alt) / 1e3 - double(this->home.alt) / 1e3;
+
+    send_detour_waypoint(lat, lon, alt);
+}
+
+void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt)
+{
+
+    // Request change to guided mode
+    set_mode(mode::GUIDED, 0);
+
     // Convert global position to mav_waypoint
     mavlink_mission_item_t mav_waypoint;
 
@@ -353,7 +773,7 @@ void mav_vehicle::goto_waypoint(double lat, double lon, double alt)
     // Arducopter supports only MAV_FRAME_GLOBAL_RELATIVE_ALT.
     mav_waypoint.frame = MAV_FRAME_GLOBAL_RELATIVE_ALT;
     mav_waypoint.current = 2; // Must be set as 2 for mode::GUIDED waypoint
-    mav_waypoint.autocontinue = 0;
+    mav_waypoint.autocontinue = 1;
 
     // Encode and Send
     mavlink_message_t mav_msg;
@@ -362,6 +782,19 @@ void mav_vehicle::goto_waypoint(double lat, double lon, double alt)
                                     &mav_msg, &mav_waypoint);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
     send_data(mav_data_buffer, n);
+
+    // Store detour waypoint
+    this->detour_waypoint.lat = lat * 1e7;
+    this->detour_waypoint.lon = lon * 1e7;
+    this->detour_waypoint.alt = alt * 1e3 + this->home.alt;
+
+    // Disable flags
+    this->rotation_enabled = false;
+
+    // Enable detour flag
+    this->detour_enabled = true;
+
+    print_verbose("Detour started\n");
 }
 
 ssize_t mav_vehicle::send_data(uint8_t *data, size_t len)
@@ -411,19 +844,19 @@ void mav_vehicle::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
     cmd_long_timestamps[cmd] = system_clock::now();
 
     if (send_data(mav_data_buffer, n) == -1) {
-        std::perror("[mav_vehicle] Error sending cmd_long");
+        print_verbose("Error sending command long\n");
         return;
     }
 
     switch (cmd) {
     case MAV_CMD_COMPONENT_ARM_DISARM:
-        print_verbose("[mav_vehicle] Arm throttle command sent\n");
+        print_verbose("Arm throttle command sent\n");
         break;
     case MAV_CMD_NAV_TAKEOFF:
-        print_verbose("[mav_vehicle] Takeoff command sent\n");
+        print_verbose("Takeoff command sent\n");
         break;
     case MAV_CMD_GET_HOME_POSITION:
-        print_verbose("[mav_vehicle] Requested home position\n");
+        print_verbose("Requested home position\n");
         break;
     default:
         break;
@@ -432,17 +865,14 @@ void mav_vehicle::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
 
 void mav_vehicle::update()
 {
-    mavlink_message_t msg;
-    mavlink_status_t status;
-
     send_heartbeat();
 
     // Check if remote is still responding
     if (is_remote_responding() &&
         is_timedout(this->remote_last_response_time,
                     defaults::remote_max_response_time_ms)) {
-        print_verbose("[mav_vehicle] Connection to vehicle lost\n");
-        print_verbose("[mav_vehicle] Waiting for vehicle...\n");
+        print_verbose("Connection to vehicle lost\n");
+        print_verbose("Waiting for vehicle...\n");
         this->remote_responding = false;
     }
 
@@ -471,7 +901,7 @@ void mav_vehicle::update()
 
         // Print new connection information
         print_verbose(
-            "[mav_vehicle] Connected to vehicle %s:%d\n",
+            "Connected to vehicle %s:%d\n",
             inet_ntoa(((struct sockaddr_in *)&this->remote_addr)->sin_addr),
             ntohs(((struct sockaddr_in *)&this->remote_addr)->sin_port));
     }
@@ -481,6 +911,8 @@ void mav_vehicle::update()
     this->remote_responding = true;
 
     // Parse mavlink message
+    mavlink_message_t msg;
+    mavlink_status_t status;
     print_mavlink("Bytes Received: %d\nDatagram: ", (int)bytes_recvd);
     for (unsigned int i = 0; i < bytes_recvd; ++i) {
         print_mavlink("%02x ", (unsigned char)data_recv[i]);
@@ -510,10 +942,67 @@ void mav_vehicle::update()
         send_cmd_long(MAV_CMD_GET_HOME_POSITION, 0, 0, 0, 0, 0, 0, 0,
                       request_intervals_ms::home_position);
     }
+
+    // Check if mission has changed
+    if (this->curr_mission_item_outdated) {
+        request_mission_item(this->curr_mission_item_id);
+    }
+
+    // Check if a detour has been finished in order to continue the mission
+    if (is_detour_enabled() &&
+        fabs(math::dist(detour_waypoint, get_global_position_int())) <=
+            defaults::detour_arrival_distance_m) {
+
+        // Finish detour
+        detour_enabled = false;
+
+        // Get back to AUTO mode to continue the mission
+        set_mode(mode::AUTO, 0);
+
+        // TODO: Is this print necessary?
+        print_verbose("Detour finished\n");
+    }
 }
 
 bool mav_vehicle::is_remote_responding() const
 {
     return remote_responding;
 }
+
+void mav_vehicle::send_mission_ack(uint8_t type)
+{
+    mavlink_mission_ack_t ack;
+
+    ack.type = type;
+    ack.target_system = defaults::target_system_id;
+    ack.target_component = defaults::target_component_id;
+
+    // Encode and Send
+    mavlink_message_t mav_msg;
+    uint8_t mav_data_buffer[defaults::send_buffer_len];
+    mavlink_msg_mission_ack_encode(defaults::system_id, defaults::component_id,
+                                   &mav_msg, &ack);
+    int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
+    send_data(mav_data_buffer, n);
+
+    print_verbose("Mission ack sent: %d\n", type);
 }
+
+void mav_vehicle::send_mission_count(int c)
+{
+    mavlink_mission_count_t count;
+
+    count.count = c;
+    count.target_system = defaults::target_system_id;
+    count.target_component = defaults::target_component_id;
+
+    // Encode and Send
+    mavlink_message_t mav_msg;
+    uint8_t mav_data_buffer[defaults::send_buffer_len];
+    mavlink_msg_mission_count_encode(defaults::system_id,
+                                     defaults::component_id, &mav_msg, &count);
+    int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
+    send_data(mav_data_buffer, n);
+}
+}
+
