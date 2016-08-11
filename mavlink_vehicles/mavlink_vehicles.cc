@@ -14,6 +14,7 @@
 // limitations under the License.
 */
 
+#include <algorithm>
 #include <arpa/inet.h>
 #include <chrono>
 #include <cstddef>
@@ -24,7 +25,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <vector>
-#include <algorithm>
 
 #include "mavlink_vehicles.hh"
 
@@ -44,7 +44,7 @@ namespace defaults
 {
 const uint8_t target_system_id = 1;
 const uint8_t target_component_id = 1;
-const uint8_t system_id = 22;
+const uint8_t system_id = 20;
 const uint8_t component_id = 0;
 const float takeoff_init_alt_m = 1.5;
 const float lookat_rot_speed_degps = 90.0;
@@ -254,32 +254,44 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mavlink_mission_request_t mission_request;
         mavlink_msg_mission_request_decode(msg, &mission_request);
 
-        if (mission_request.seq >= mav.mission_items_list.size()) {
-            mav.send_mission_ack(MAV_MISSION_ERROR);
-            print_verbose("Mission seq invalid: %d\n",
-                          mission_request.seq);
-        } else {
-            global_pos_int item = mav.mission_items_list[mission_request.seq];
-            mav.send_mission_waypoint(item.lat, item.lon, item.alt,
-                                      mission_request.seq);
+        print_verbose("MI Request received: %d\n",
+                      mission_request.target_system);
+
+        // ArduCopter broadcasts MAVLINK_MSG_ID_MISSION_REQUESTS with
+        // 'target_sytem_id' set to 255, therefore it's not possible to
+        // determine whether the request is aimed to us or not. This might cause
+        // problems in case two instances of a vehicle are sending mission items
+        // to the Copter.
+
+        // If we are not sending a mission or if the mission item requested is
+        // not within our mission size, simply ignore it.
+        if (!mav.is_sending_mission ||
+            mission_request.seq >= mav.mission_items_list.size()) {
+            break;
         }
+
+        // Send requested mission waypoint
+        global_pos_int item = mav.mission_items_list[mission_request.seq];
+        mav.send_mission_waypoint(item.lat, item.lon, item.alt,
+                                  mission_request.seq);
         break;
     }
     case MAVLINK_MSG_ID_MISSION_ACK: {
         mavlink_mission_ack_t ack;
         mavlink_msg_mission_ack_decode(msg, &ack);
 
-        // A mission ACK has been received.  If the ack is respective to a new
-        // mission item, MAV_CMD_MISSION_START needs to be sent to continue
-        if (mav.is_sending_mission) {
-            mav.set_mode(mode::AUTO, 0);
-            mav.is_sending_mission = false;
-        }
-
-        // If a mission item has been received, it means that the mission might
+        // A MISSION_ACK has been broadcast what means that the mission might
         // have changed, and so, our currently stored mission item might be
         // outdated.
         mav.curr_mission_item_outdated = true;
+
+        // If the target of the ACK is our system and if we have been sending a
+        // mission list, then it means that the list has been fully received by
+        // the vehicle and that we can request a mission start.
+        if (ack.target_system == mav.system_id && mav.is_sending_mission) {
+            mav.set_mode(mode::AUTO, 0);
+            mav.is_sending_mission = false;
+        }
         break;
     }
     case MAVLINK_MSG_ID_MISSION_CURRENT: {
@@ -298,6 +310,11 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mavlink_mission_item_int_t mission_item;
         mavlink_msg_mission_item_int_decode(msg, &mission_item);
         global_pos_int global_mission_item;
+
+        // Ignore if we are not the target of this mission item
+        if (mission_item.target_system != mav.system_id) {
+            break;
+        }
 
         // Evaluate mission frame and store mission item position with global
         // coordinates
@@ -354,6 +371,27 @@ mav_vehicle::mav_vehicle(int socket_fd)
 {
     // Store socket
     this->sock = socket_fd;
+
+    // The system_id must be unique for each instance of the mav_vehicle. We
+    // will use the port associated to the socket as the system_id of this
+    // instance.
+    struct sockaddr_storage our_addr = {0};
+    socklen_t our_addr_len = sizeof(our_addr);
+    if (getsockname(this->sock, (struct sockaddr *)&our_addr, &our_addr_len) ==
+        -1) {
+        print_verbose("The socket provided to the constructor is invalid\n");
+        this->system_id = defaults::system_id;
+    }
+    uint16_t our_port = ntohs(((struct sockaddr_in *)&our_addr)->sin_port);
+
+    // TODO: Since mavlink system_ids are uint8_t values while ports are
+    // uint16_t, we need to calculate the remainder in order to have a valid
+    // value. This might not be the best approach, since sockets associated to
+    // different ports could possibly still result the same system_id to this
+    // instance of mav_vehicle. We need to figure out a better way of
+    // generating this system_id.
+    this->system_id = our_port % UINT8_MAX;
+    print_verbose("Our system id: %d %d\n", this->system_id, our_port);
     print_verbose("Waiting for vehicle...\n");
 }
 
@@ -475,7 +513,7 @@ void mav_vehicle::send_heartbeat()
 
     // Encode and send
     uint8_t mav_data_buffer[defaults::send_buffer_len];
-    mavlink_msg_heartbeat_encode(defaults::system_id, defaults::component_id,
+    mavlink_msg_heartbeat_encode(this->system_id, defaults::component_id,
                                  &mav_msg, &mav_heartbeat);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
 
@@ -532,7 +570,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
 
         // Encode and send
         uint8_t mav_data_buffer[defaults::send_buffer_len];
-        mavlink_msg_set_mode_encode(defaults::system_id, defaults::component_id,
+        mavlink_msg_set_mode_encode(this->system_id, defaults::component_id,
                                     &mav_msg, &mav_cmd_set_mode);
         int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
 
@@ -559,7 +597,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
 
         // Encode and send
         uint8_t mav_data_buffer[defaults::send_buffer_len];
-        mavlink_msg_set_mode_encode(defaults::system_id, defaults::component_id,
+        mavlink_msg_set_mode_encode(this->system_id, defaults::component_id,
                                     &mav_msg, &mav_cmd_set_mode);
         int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
         send_data(mav_data_buffer, n);
@@ -600,7 +638,7 @@ void mav_vehicle::request_mission_item(uint16_t item_id)
 
     // Encode and send
     uint8_t mav_data_buffer[defaults::send_buffer_len];
-    mavlink_msg_mission_request_int_encode(defaults::system_id,
+    mavlink_msg_mission_request_int_encode(this->system_id,
                                            defaults::component_id, &mav_msg,
                                            &mav_mission_request);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
@@ -733,8 +771,8 @@ void mav_vehicle::send_mission_waypoint(int32_t lat, int32_t lon, int32_t alt,
     // Encode and Send
     mavlink_message_t mav_msg;
     uint8_t mav_data_buffer[defaults::send_buffer_len];
-    mavlink_msg_mission_item_int_encode(
-        defaults::system_id, defaults::component_id, &mav_msg, &mav_waypoint);
+    mavlink_msg_mission_item_int_encode(this->system_id, defaults::component_id,
+                                        &mav_msg, &mav_waypoint);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
     send_data(mav_data_buffer, n);
 }
@@ -778,7 +816,7 @@ void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt)
     // Encode and Send
     mavlink_message_t mav_msg;
     uint8_t mav_data_buffer[defaults::send_buffer_len];
-    mavlink_msg_mission_item_encode(defaults::system_id, defaults::component_id,
+    mavlink_msg_mission_item_encode(this->system_id, defaults::component_id,
                                     &mav_msg, &mav_waypoint);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
     send_data(mav_data_buffer, n);
@@ -836,7 +874,7 @@ void mav_vehicle::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
 
     // Encode and send
     static uint8_t mav_data_buffer[defaults::send_buffer_len];
-    mavlink_msg_command_long_encode(defaults::system_id, defaults::component_id,
+    mavlink_msg_command_long_encode(this->system_id, defaults::component_id,
                                     &mav_msg, &mav_cmd);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
 
@@ -980,7 +1018,7 @@ void mav_vehicle::send_mission_ack(uint8_t type)
     // Encode and Send
     mavlink_message_t mav_msg;
     uint8_t mav_data_buffer[defaults::send_buffer_len];
-    mavlink_msg_mission_ack_encode(defaults::system_id, defaults::component_id,
+    mavlink_msg_mission_ack_encode(this->system_id, defaults::component_id,
                                    &mav_msg, &ack);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
     send_data(mav_data_buffer, n);
@@ -999,8 +1037,8 @@ void mav_vehicle::send_mission_count(int c)
     // Encode and Send
     mavlink_message_t mav_msg;
     uint8_t mav_data_buffer[defaults::send_buffer_len];
-    mavlink_msg_mission_count_encode(defaults::system_id,
-                                     defaults::component_id, &mav_msg, &count);
+    mavlink_msg_mission_count_encode(this->system_id, defaults::component_id,
+                                     &mav_msg, &count);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
     send_data(mav_data_buffer, n);
 }

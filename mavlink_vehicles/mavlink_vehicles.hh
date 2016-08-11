@@ -69,7 +69,13 @@ enum class arm_status { ARMED, NOT_ARMED };
 
 enum class gps_status { NO_FIX, FIX_2D_PLUS };
 
-enum class cmd_custom { HEARTBEAT, SET_MODE_GUIDED, SET_MODE_AUTO, REQUEST_MISSION_ITEM, ROTATE };
+enum class cmd_custom {
+    HEARTBEAT,
+    SET_MODE_GUIDED,
+    SET_MODE_AUTO,
+    REQUEST_MISSION_ITEM,
+    ROTATE
+};
 
 class msghandler;
 
@@ -144,6 +150,7 @@ class mav_vehicle
     bool detour_enabled = false;
     bool rotation_enabled = false;
 
+    uint8_t system_id = 0;
     int sock = 0;
     struct sockaddr_storage remote_addr = {0};
     socklen_t remote_addr_len = sizeof(remote_addr);
