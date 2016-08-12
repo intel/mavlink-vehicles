@@ -16,13 +16,13 @@
 
 #pragma once
 
-#include <vector>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unordered_map>
+#include <vector>
 
 namespace mavlink_vehicles
 {
@@ -103,26 +103,34 @@ class mav_vehicle
     status get_status() const;
     gps_status get_gps_status() const;
     arm_status get_arm_status() const;
+
     attitude get_attitude();
     local_pos get_local_position_ned();
     global_pos_int get_home_position_int();
     global_pos_int get_global_position_int();
+
     global_pos_int get_mission_waypoint();
     global_pos_int get_detour_waypoint();
-    bool is_detour_enabled();
 
     void takeoff();
     void arm_throttle();
     void send_heartbeat();
     void set_mode(mode m);
-    void rotate(double angleDeg);
-    bool is_rotating();
     void request_mission_item(uint16_t item_id);
 
+    // Command the vehicle to immediately stop and rotate before moving to the
+    // next mission waypoint. If the vehicle is currently taking a detour, that
+    // detour will be immediately aborted.
+    void rotate(double angle_deg);
+    bool is_rotation_active() const;
+
     // Command the vehicle to immediately take a detour through the given
-    // waypoint before moving to the next mission waypoint.
+    // waypoint before moving to the next mission waypoint. If the vehicle is
+    // currently currently rotating because of a previous rotate() command, the
+    // rotation will be immediately aborted.
     void send_detour_waypoint(double lat, double lon, double alt);
     void send_detour_waypoint(global_pos_int global);
+    bool is_detour_active() const;
 
     // Command the vehicle to go immediately to the given waypoint
     void send_mission_waypoint(double lat, double lon, double alt);
@@ -147,8 +155,10 @@ class mav_vehicle
     bool is_sending_mission = false;
 
     global_pos_int detour_waypoint;
-    bool detour_enabled = false;
-    bool rotation_enabled = false;
+    bool detour_active = false;
+
+    float rotation_goal = 0;
+    bool rotation_active = false;
 
     uint8_t system_id = 0;
     int sock = 0;
@@ -164,7 +174,6 @@ class mav_vehicle
     std::unordered_map<cmd_custom,
                        std::chrono::time_point<std::chrono::system_clock>>
         cmd_custom_timestamps;
-
 
     ssize_t send_data(uint8_t *data, size_t len);
     void send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
