@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <arpa/inet.h>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -51,7 +52,8 @@ const float lookat_rot_speed_degps = 90.0;
 const size_t send_buffer_len = 2041;
 const uint16_t remote_max_response_time_ms = 10000;
 const double waypoint_acceptance_radius_m = 0.01;
-const double detour_arrival_distance_m = 0.5;
+const double detour_arrival_max_dist_m = 0.5;
+const double rotation_arrival_max_dif_deg = 10;
 }
 
 namespace request_intervals_ms
@@ -360,7 +362,10 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         // Check if a rotation has been initialized
         if (command_ack.command == MAV_CMD_CONDITION_YAW &&
             command_ack.result == MAV_RESULT_ACCEPTED) {
-            mav.rotation_enabled = true;
+            mav.rotation_goal =
+                std::fmod(mav.get_attitude().yaw - mav.rotation_goal, M_PI);
+            mav.rotation_active = true;
+            mav.detour_active = false;
             break;
         }
     }
@@ -480,9 +485,9 @@ global_pos_int mav_vehicle::get_detour_waypoint()
     return detour_waypoint_copy;
 }
 
-bool mav_vehicle::is_detour_enabled()
+bool mav_vehicle::is_detour_active() const
 {
-    return this->detour_enabled;
+    return this->detour_active;
 }
 
 gps_status mav_vehicle::get_gps_status() const
@@ -675,12 +680,15 @@ void mav_vehicle::rotate(double angle_deg)
         return;
     }
 
+    // Set rotation goal
+    this->rotation_goal = math::deg2rad(angle_deg);
+
     // We need to make sure mode is set as GUIDED in order to send the rotation
     // command
     set_mode(mode::GUIDED, 0);
 
     // Set a detour waypoint on the current position
-    send_detour_waypoint(this->global);
+    // send_detour_waypoint(this->global);
 
     // Send the rotation command immediately
     send_cmd_long(MAV_CMD_CONDITION_YAW, fabs(angle_deg),
@@ -693,9 +701,9 @@ void mav_vehicle::rotate(double angle_deg)
     print_verbose("Sending rotation command\n");
 }
 
-bool mav_vehicle::is_rotating()
+bool mav_vehicle::is_rotation_active() const
 {
-    return this->rotation_enabled;
+    return this->rotation_active;
 }
 
 void mav_vehicle::send_mission_waypoint(global_pos_int global)
@@ -737,8 +745,8 @@ void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt)
 
     // TODO: These flags preferably should be set on the CMD_ACK of this
     // command and not here.
-    this->detour_enabled = false;
-    this->rotation_enabled = false;
+    this->detour_active = false;
+    this->rotation_active = false;
 
     print_verbose("Mission started\n");
 
@@ -827,10 +835,10 @@ void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt)
     this->detour_waypoint.alt = alt * 1e3 + this->home.alt;
 
     // Disable flags
-    this->rotation_enabled = false;
+    this->rotation_active = false;
 
     // Enable detour flag
-    this->detour_enabled = true;
+    this->detour_active = true;
 
     print_verbose("Detour started\n");
 }
@@ -987,18 +995,31 @@ void mav_vehicle::update()
     }
 
     // Check if a detour has been finished in order to continue the mission
-    if (is_detour_enabled() &&
+    if (is_detour_active() &&
         fabs(math::dist(detour_waypoint, get_global_position_int())) <=
-            defaults::detour_arrival_distance_m) {
+            defaults::detour_arrival_max_dist_m) {
 
         // Finish detour
-        detour_enabled = false;
+        detour_active = false;
 
         // Get back to AUTO mode to continue the mission
         set_mode(mode::AUTO, 0);
 
-        // TODO: Is this print necessary?
         print_verbose("Detour finished\n");
+    }
+
+    // Check if a rotation has been finished in order to continue the mission
+    if (is_rotation_active() &&
+        (fabs(get_attitude().yaw - this->rotation_goal) <=
+         math::deg2rad(defaults::rotation_arrival_max_dif_deg))) {
+
+        // Finish rotation
+        rotation_active = false;
+
+        // Get back to AUTO mode to continue the mission
+        set_mode(mode::AUTO, 0);
+
+        print_verbose("Rotation finished\n");
     }
 }
 

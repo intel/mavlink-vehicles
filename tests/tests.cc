@@ -287,7 +287,7 @@ void mission_test::run()
     std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(10000));
 
     // Set mission target position
-    mavlink_vehicles::local_pos target_local(10.0, 10.0, -10.0);
+    mavlink_vehicles::local_pos target_local(30.0, 30.0, -10.0);
     mavlink_vehicles::global_pos_int target_global =
         mavlink_vehicles::math::local_ned_to_global(target_local, home);
 
@@ -303,14 +303,20 @@ void mission_test::run()
     std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(5000));
 
     // Send detour target position
-    this->mav->send_detour_waypoint(detour_global);
-    std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(5000));
+    // this->mav->send_detour_waypoint(detour_global);
+    // std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(5000));
+
+    // Send Rotation command
+    this->mav->rotate(-140);
 
     // Wait until the vehicle gets to the mission target
     while(true) {
         mavlink_vehicles::local_pos local = this->mav->get_local_position_ned();
-        std::cout << "Detour enabled: " << this->mav->is_detour_enabled()
+        std::cout << "Detour enabled: " << this->mav->is_detour_active()
                   << std::endl;
+        std::cout << "Rotation enabled: " << this->mav->is_rotation_active()
+                  << std::endl;
+        std::cout << "Yaw: " << this->mav->get_attitude().yaw << std::endl;
         std::cout << "[mission test] Local Position: " << local.x << ", "
                   << local.y << ", " << local.z << std::endl;
 
