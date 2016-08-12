@@ -46,5 +46,35 @@ class connection_test
     void show_mav_state();
     void update();
 };
+
+class mission_test
+{
+
+  public:
+    mission_test();
+    ~mission_test();
+
+    void run();
+
+  private:
+    int sock = 0;
+    socklen_t fromlen = {0};
+    struct sockaddr_in local_addr = {0};
+    std::shared_ptr<mavlink_vehicles::mav_vehicle> mav;
+    std::thread send_recv_thread;
+    bool send_recv_thread_run = false;
+
+    void show_mav_state();
+    void update();
+};
+
+class conversion_test
+{
+  public:
+    conversion_test();
+    ~conversion_test();
+
+    void run();
+};
 }
 

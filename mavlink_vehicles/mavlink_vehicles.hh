@@ -22,6 +22,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unordered_map>
+#include <vector>
 
 namespace mavlink_vehicles
 {
@@ -46,25 +47,48 @@ struct global_pos_int : state_variable {
     int32_t lat;
     int32_t lon;
     int32_t alt;
+    global_pos_int() {}
+    global_pos_int(int32_t _lat, int32_t _lon, int32_t _alt)
+        : lat(_lat), lon(_lon), alt(_alt) {}
 };
 
 struct local_pos : state_variable {
     float x;
     float y;
     float z;
+
+    local_pos() {}
+    local_pos(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
 };
 
 enum class status { STANDBY, ACTIVE };
 
-enum class mode { GUIDED, OTHER };
+enum class mode { GUIDED, AUTO, OTHER };
 
 enum class arm_status { ARMED, NOT_ARMED };
 
 enum class gps_status { NO_FIX, FIX_2D_PLUS };
 
-enum class cmd_custom { HEARTBEAT, SET_MODE };
+enum class cmd_custom {
+    HEARTBEAT,
+    SET_MODE_GUIDED,
+    SET_MODE_AUTO,
+    REQUEST_MISSION_ITEM,
+    ROTATE
+};
 
 class msghandler;
+
+namespace math
+{
+inline double rad2deg(double x);
+inline double deg2rad(double x);
+double dist(global_pos_int p1, global_pos_int p2);
+double ground_dist(global_pos_int p1, global_pos_int p2);
+double ground_dist(local_pos p1, local_pos p2);
+local_pos global_to_local_ned(global_pos_int point, global_pos_int reference);
+global_pos_int local_ned_to_global(local_pos point, global_pos_int reference);
+}
 
 class mav_vehicle
 {
@@ -79,17 +103,38 @@ class mav_vehicle
     status get_status() const;
     gps_status get_gps_status() const;
     arm_status get_arm_status() const;
+
     attitude get_attitude();
     local_pos get_local_position_ned();
     global_pos_int get_home_position_int();
     global_pos_int get_global_position_int();
 
+    global_pos_int get_mission_waypoint();
+    global_pos_int get_detour_waypoint();
+
     void takeoff();
     void arm_throttle();
     void send_heartbeat();
     void set_mode(mode m);
-    void rotate(double angleDeg);
-    void goto_waypoint(double lat, double lon, double alt);
+    void request_mission_item(uint16_t item_id);
+
+    // Command the vehicle to immediately stop and rotate before moving to the
+    // next mission waypoint. If the vehicle is currently taking a detour, that
+    // detour will be immediately aborted.
+    void rotate(double angle_deg);
+    bool is_rotation_active() const;
+
+    // Command the vehicle to immediately take a detour through the given
+    // waypoint before moving to the next mission waypoint. If the vehicle is
+    // currently currently rotating because of a previous rotate() command, the
+    // rotation will be immediately aborted.
+    void send_detour_waypoint(double lat, double lon, double alt);
+    void send_detour_waypoint(global_pos_int global);
+    bool is_detour_active() const;
+
+    // Command the vehicle to go immediately to the given waypoint
+    void send_mission_waypoint(double lat, double lon, double alt);
+    void send_mission_waypoint(global_pos_int global);
 
   private:
     status stat;
@@ -102,6 +147,20 @@ class mav_vehicle
     global_pos_int home;
     global_pos_int global;
 
+    global_pos_int curr_mission_item_pos;
+    uint16_t curr_mission_item_id = 0;
+    bool curr_mission_item_outdated = true;
+
+    std::vector<global_pos_int> mission_items_list;
+    bool is_sending_mission = false;
+
+    global_pos_int detour_waypoint;
+    bool detour_active = false;
+
+    float rotation_goal = 0;
+    bool rotation_active = false;
+
+    uint8_t system_id = 0;
     int sock = 0;
     struct sockaddr_storage remote_addr = {0};
     socklen_t remote_addr_len = sizeof(remote_addr);
@@ -119,6 +178,11 @@ class mav_vehicle
     ssize_t send_data(uint8_t *data, size_t len);
     void send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
                        float p5, float p6, float p7, int timeout);
+    void send_mission_waypoint(int32_t lat, int32_t lon, int32_t alt,
+                               uint16_t seq);
+    void send_mission_ack(uint8_t type);
+    void set_mode(mode m, int timeout);
+    void send_mission_count(int n);
 
     friend class msghandler;
 };
