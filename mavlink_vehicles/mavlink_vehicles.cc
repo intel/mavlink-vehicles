@@ -101,18 +101,22 @@ inline double deg2rad(double x)
 
 local_pos global_to_local_ned(global_pos_int point, global_pos_int reference)
 {
-    // Scaling factor to convert from 1e-7 degrees to meters at equator
-    // Given by: (M_PI/180)*EARTH_RADIUS_AT_EQUATOR
-    const double location_scaling_factor = 0.011131884502145034f;
-    double longitude_scaling_factor =
-        cosf(math::deg2rad(reference.lat * 1.0e-7f));
+    // Scaling factor to convert from degrees (fixed-point-1e7) to meters at
+    // equator: (M_PI/(180*1e7))*EARTH_RADIUS_AT_EQUATOR
+    const double deg_to_meters_scaling_factor = 0.011131884502145034f;
+
+    // Compensate shrinking in earth radius as you move north or
+    // shouth from the equator.
+    double radius_scaling_factor = cosf(math::deg2rad(reference.lat * 1.0e-7f));
 
     // Subtract and scale
     local_pos local;
-    local.x = (point.lat - reference.lat) * location_scaling_factor;
-    local.y = (point.lon - reference.lon) * location_scaling_factor *
-              longitude_scaling_factor;
-    local.z = (point.alt - reference.alt) / 1000.0;
+    local.x = (point.lat - reference.lat) * deg_to_meters_scaling_factor;
+    local.y = (point.lon - reference.lon) * deg_to_meters_scaling_factor *
+              radius_scaling_factor;
+
+    // Subtract and convert from millimeters (int) to meters (double)
+    local.z = (point.alt - reference.alt) * 1.0e-3f;
 
     // Convert from ENU to NED
     std::swap(local.x, local.y);
@@ -123,21 +127,26 @@ local_pos global_to_local_ned(global_pos_int point, global_pos_int reference)
 
 global_pos_int local_ned_to_global(local_pos point, global_pos_int reference)
 {
-    // Scaling factor to convert from meters to 1e-7 degrees at equator
-    // Given by: (180/M_PI)/EARTH_RADIUS_AT_EQUATOR
-    const double location_scaling_factor = 89.83204953368922;
-    double longitude_scaling_factor =
-        cosf(math::deg2rad(reference.lat * 1.0e-7f));
+    // Scaling factor to convert from meters to degrees (fixed-point-1e7) at
+    // equator: ((180*1e7)/M_PI)/EARTH_RADIUS_AT_EQUATOR
+    const double meters_to_deg_scaling_factor = 89.83204953368922f;
+
+    // Compensate shrinking in earth radius as you move north or
+    // south from the equator.
+    double radius_scaling_factor = cosf(math::deg2rad(reference.lat * 1.0e-7f));
 
     // Convert from NED to ENU
     std::swap(point.x, point.y);
     point.z = -point.z;
 
-    // Scale and sim
+    // Scale and add
     global_pos_int global;
-    global.lat = point.x * location_scaling_factor + reference.lat;
-    global.lon = point.y * location_scaling_factor / longitude_scaling_factor +
-                 reference.lon;
+    global.lat = point.x * meters_to_deg_scaling_factor + reference.lat;
+    global.lon =
+        point.y * meters_to_deg_scaling_factor / radius_scaling_factor +
+        reference.lon;
+
+    // Convert from meters (double) to millimeters (int) and sum with reference
     global.alt = point.z * 1000.0 + reference.alt;
 
     return global;
