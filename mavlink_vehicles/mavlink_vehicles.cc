@@ -274,9 +274,8 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
 
         // Send requested mission waypoint
         global_pos_int item = mav.mission_items_list[mission_request.seq];
-        mav.send_mission_waypoint(item.lat, item.lon, item.alt,
-                                  mission_request.seq);
-        break;
+        mav.send_mission_waypoint(item, mission_request.seq);
+        return;
     }
     case MAVLINK_MSG_ID_MISSION_ACK: {
         mavlink_mission_ack_t ack;
@@ -706,28 +705,21 @@ bool mav_vehicle::is_rotation_active() const
     return this->rotation_active;
 }
 
-void mav_vehicle::send_mission_waypoint(global_pos_int global)
-{
-
-    double lat = double(global.lat) / 1e7;
-    double lon = double(global.lon) / 1e7;
-    double alt = double(global.alt) / 1e3 - double(this->home.alt) / 1e3;
-
-    send_mission_waypoint(lat, lon, alt);
-}
-
 void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt)
 {
-
-    // We need to toggle from AUTO to GUIDED in order to update the mission
-    // waypoints
-    set_mode(mode::GUIDED, 0);
-
-    // Create a waypoint to be saved into the mission_items_list
     global_pos_int wp;
     wp.lat = lat * 1e7;
     wp.lon = lon * 1e7;
-    wp.alt = alt * 1e3;
+    wp.alt = alt * 1e3 + double(this->home.alt);
+
+    send_mission_waypoint(wp);
+}
+
+void mav_vehicle::send_mission_waypoint(global_pos_int wp)
+{
+    // We need to toggle from AUTO to GUIDED in order to update the mission
+    // waypoints
+    set_mode(mode::GUIDED, 0);
 
     // Ardupilot reserves the first element of the mission commands list
     // (seq=0) to the home position. Sending a mission item with that sequence
@@ -735,8 +727,7 @@ void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt)
     // it. For that reason, the first waypoint (seq=0) must be a mock waypoint
     // that will never be used and our waypoints must start with seq=1
     this->mission_items_list.resize(0);
-    this->mission_items_list.push_back(
-        wp); // Mock waypoint. It will be ignored.
+    this->mission_items_list.push_back(wp); // Mock waypoint. Will be ignored.
     this->mission_items_list.push_back(wp); // Real target waypoint.
 
     // Send the mission_count command to Ardupilot so that it prepares to
@@ -753,28 +744,35 @@ void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt)
     this->is_sending_mission = true;
 }
 
-void mav_vehicle::send_mission_waypoint(int32_t lat, int32_t lon, int32_t alt,
-                                        uint16_t seq)
+void mav_vehicle::send_mission_waypoint(global_pos_int wp, uint16_t seq)
 {
-    // Convert global position to mav_waypoint
     mavlink_mission_item_int_t mav_waypoint;
 
-    mav_waypoint.param1 = 0;    // Hold time in decimal seconds
-    mav_waypoint.param2 = 0.01; // Acceptance radius in meters
-    mav_waypoint.param3 = 0;    // Radius in meters to pass through wp
-    mav_waypoint.param4 = 0;    // Desired yaw angle
-    mav_waypoint.x = lat;
-    mav_waypoint.y = lon;
-    mav_waypoint.z = alt / 1e3f;
-    mav_waypoint.seq = seq;
+    // Set mavlink message attributes
     mav_waypoint.command = MAV_CMD_NAV_WAYPOINT;
     mav_waypoint.target_system = defaults::target_system_id;
     mav_waypoint.target_component = defaults::target_component_id;
 
     // Arducopter supports only MAV_FRAME_GLOBAL_RELATIVE_ALT.
     mav_waypoint.frame = MAV_FRAME_GLOBAL_RELATIVE_ALT;
-    mav_waypoint.current = 0; // Must be set as 2 for mode::GUIDED waypoint
-    mav_waypoint.autocontinue = 0;
+
+    // Set coordinates in Degrees * 1e7 according to frame and message type
+    mav_waypoint.x = wp.lat;
+    mav_waypoint.y = wp.lon;
+
+    // Set relative altitude in meters according to frame
+    mav_waypoint.z = (wp.alt - double(this->home.alt)) / 1e3f;
+
+    // Set sequence number
+    mav_waypoint.seq = seq;
+
+    // Set params
+    mav_waypoint.param1 = 0;       // Hold time in decimal seconds
+    mav_waypoint.param2 = 0.01;    // Acceptance radius in meters
+    mav_waypoint.param3 = 0;       // Radius in meters to pass through wp
+    mav_waypoint.param4 = 0;       // Desired yaw angle at arrival
+    mav_waypoint.current = 0;      // Unused
+    mav_waypoint.autocontinue = 0; // Unused
 
     // Encode and Send
     mavlink_message_t mav_msg;
@@ -785,41 +783,46 @@ void mav_vehicle::send_mission_waypoint(int32_t lat, int32_t lon, int32_t alt,
     send_data(mav_data_buffer, n);
 }
 
-void mav_vehicle::send_detour_waypoint(global_pos_int global)
-{
-
-    double lat = double(global.lat) / 1e7;
-    double lon = double(global.lon) / 1e7;
-    double alt = double(global.alt) / 1e3 - double(this->home.alt) / 1e3;
-
-    send_detour_waypoint(lat, lon, alt);
-}
-
 void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt)
 {
+    global_pos_int wp;
+    wp.lat = lat * 1e7;
+    wp.lon = lon * 1e7;
+    wp.alt = alt * 1e3 + double(this->home.alt);
+
+    send_detour_waypoint(wp);
+}
+
+void mav_vehicle::send_detour_waypoint(global_pos_int wp)
+{
+    mavlink_mission_item_t mav_waypoint;
 
     // Request change to guided mode
     set_mode(mode::GUIDED, 0);
 
-    // Convert global position to mav_waypoint
-    mavlink_mission_item_t mav_waypoint;
-
-    mav_waypoint.param1 = 0; // Hold time in decimal seconds
-    mav_waypoint.param2 = defaults::waypoint_acceptance_radius_m;
-    mav_waypoint.param3 = 0; // Radius in meters to pass through wp
-    mav_waypoint.param4 = 0; // Desired yaw angle
-    mav_waypoint.x = lat;
-    mav_waypoint.y = lon;
-    mav_waypoint.z = alt;
-    mav_waypoint.seq = 0;
+    // Set mavlink message attributes
     mav_waypoint.command = MAV_CMD_NAV_WAYPOINT;
     mav_waypoint.target_system = defaults::target_system_id;
     mav_waypoint.target_component = defaults::target_component_id;
 
     // Arducopter supports only MAV_FRAME_GLOBAL_RELATIVE_ALT.
     mav_waypoint.frame = MAV_FRAME_GLOBAL_RELATIVE_ALT;
-    mav_waypoint.current = 2; // Must be set as 2 for mode::GUIDED waypoint
-    mav_waypoint.autocontinue = 1;
+
+    // Set coordinates in Degrees according to frame and message type
+    mav_waypoint.x = double(wp.lat) / 1e7f;
+    mav_waypoint.y = double(wp.lon) / 1e7f;
+
+    // Set relative altitude in meters according to frame
+    mav_waypoint.z = double(wp.alt - this->home.alt) / 1e3f;
+
+    // Set params
+    mav_waypoint.seq = 0;    // Unused
+    mav_waypoint.param1 = 0; // Hold time in decimal seconds
+    mav_waypoint.param2 = defaults::waypoint_acceptance_radius_m;
+    mav_waypoint.param3 = 0;       // Radius in meters to pass through wp
+    mav_waypoint.param4 = 0;       // Desired yaw angle
+    mav_waypoint.current = 2;      // Must be set as 2 for GUIDED waypoint
+    mav_waypoint.autocontinue = 0; // Unused
 
     // Encode and Send
     mavlink_message_t mav_msg;
@@ -830,9 +833,7 @@ void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt)
     send_data(mav_data_buffer, n);
 
     // Store detour waypoint
-    this->detour_waypoint.lat = lat * 1e7;
-    this->detour_waypoint.lon = lon * 1e7;
-    this->detour_waypoint.alt = alt * 1e3 + this->home.alt;
+    this->detour_waypoint = wp;
 
     // Disable flags
     this->rotation_active = false;
