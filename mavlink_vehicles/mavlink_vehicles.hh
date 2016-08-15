@@ -177,8 +177,7 @@ class mav_vehicle
     ssize_t send_data(uint8_t *data, size_t len);
     void send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
                        float p5, float p6, float p7, int timeout);
-    void send_mission_waypoint(int32_t lat, int32_t lon, int32_t alt,
-                               uint16_t seq);
+    void send_mission_waypoint(global_pos_int wp, uint16_t seq);
     void send_mission_ack(uint8_t type);
     void set_mode(mode m, int timeout);
     void send_mission_count(int n);
