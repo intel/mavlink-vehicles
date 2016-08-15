@@ -44,19 +44,18 @@ struct attitude : state_variable {
 };
 
 struct global_pos_int : state_variable {
-    int32_t lat;
-    int32_t lon;
-    int32_t alt;
+    int32_t lat; // Degrees * 1e7
+    int32_t lon; // Degrees * 1e7
+    int32_t alt; // Millimeters (AMSL)
     global_pos_int() {}
     global_pos_int(int32_t _lat, int32_t _lon, int32_t _alt)
         : lat(_lat), lon(_lon), alt(_alt) {}
 };
 
 struct local_pos : state_variable {
-    float x;
-    float y;
-    float z;
-
+    float x; // Meters
+    float y; // Meters
+    float z; // Meters
     local_pos() {}
     local_pos(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
 };
