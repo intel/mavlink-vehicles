@@ -346,7 +346,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             print_verbose("Received mission item with "
                           "unsupported frame num: %d",
                           (int)mission_item.frame);
-            break;
+            return;
         }
         }
 
