@@ -209,26 +209,26 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mav.home.lon = home_position.longitude;
         mav.home.alt = home_position.altitude;
         mav.home.is_new = true;
-        break;
+        return;
     }
     case MAVLINK_MSG_ID_GPS_RAW_INT: {
         mavlink_gps_raw_int_t gps_raw_int;
         mavlink_msg_gps_raw_int_decode(msg, &gps_raw_int);
         mav.gps = (gps_raw_int.fix_type > 2) ? gps_status::FIX_2D_PLUS
                                              : gps_status::NO_FIX;
-        break;
+        return;
     }
     case MAVLINK_MSG_ID_HEARTBEAT: {
         mavlink_heartbeat_t hb;
         mavlink_msg_heartbeat_decode(msg, &hb);
 
-        // Decode mode flag ArduCopter only supports custom_modes. The
-        // custom_mode value for each mode is described on ArduCopter's
-        // documentation.
+        // Decode mode flag
+        // ArduCopter only supports custom_modes. The custom_mode value for
+        // each mode is described in ArduCopter's documentation.
         mav.base_mode = mode::OTHER;
 
         if (!(hb.base_mode & MAV_MODE_FLAG_CUSTOM_MODE_ENABLED)) {
-            break;
+            return;
         }
 
         switch (hb.custom_mode) {
@@ -248,7 +248,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         // Decode status flag
         mav.stat = (hb.system_status == MAV_STATE_ACTIVE) ? status::ACTIVE
                                                           : status::STANDBY;
-        break;
+        return;
     }
     case MAVLINK_MSG_ID_GLOBAL_POSITION_INT: {
         mavlink_global_position_int_t global_pos_int;
@@ -258,7 +258,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mav.global.lon = global_pos_int.lon;
         mav.global.alt = global_pos_int.alt;
         mav.global.is_new = true;
-        break;
+        return;
     }
     case MAVLINK_MSG_ID_MISSION_REQUEST:
     case MAVLINK_MSG_ID_MISSION_REQUEST_INT: {
@@ -278,7 +278,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         // not within our mission size, simply ignore it.
         if (!mav.is_sending_mission ||
             mission_request.seq >= mav.mission_items_list.size()) {
-            break;
+            return;
         }
 
         // Send requested mission waypoint
@@ -302,7 +302,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             mav.set_mode(mode::AUTO, 0);
             mav.is_sending_mission = false;
         }
-        break;
+        return;
     }
     case MAVLINK_MSG_ID_MISSION_CURRENT: {
         mavlink_mission_current_t mission_current;
@@ -314,7 +314,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             mav.curr_mission_item_id = mission_current.seq;
             mav.curr_mission_item_outdated = true;
         }
-        break;
+        return;
     }
     case MAVLINK_MSG_ID_MISSION_ITEM_INT: {
         mavlink_mission_item_int_t mission_item;
@@ -323,7 +323,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
 
         // Ignore if we are not the target of this mission item
         if (mission_item.target_system != mav.system_id) {
-            break;
+            return;
         }
 
         // Evaluate mission frame and store mission item position with global
@@ -361,7 +361,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             mav.curr_mission_item_outdated = false;
             print_verbose("Mission waypoint updated\n");
         }
-        break;
+        return;
     }
     case MAVLINK_MSG_ID_COMMAND_ACK: {
         mavlink_command_ack_t command_ack;
@@ -374,7 +374,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
                 std::fmod(mav.get_attitude().yaw - mav.rotation_goal, M_PI);
             mav.rotation_active = true;
             mav.detour_active = false;
-            break;
+            return;
         }
     }
     }
@@ -390,8 +390,7 @@ mav_vehicle::mav_vehicle(int socket_fd)
     // instance.
     struct sockaddr_storage our_addr = {0};
     socklen_t our_addr_len = sizeof(our_addr);
-    if (getsockname(this->sock, (struct sockaddr *)&our_addr, &our_addr_len) ==
-        -1) {
+    if (getsockname(this->sock, (struct sockaddr *)&our_addr, &our_addr_len) == -1) {
         print_verbose("The socket provided to the constructor is invalid\n");
         this->system_id = defaults::system_id;
     }
