@@ -29,7 +29,6 @@
 
 int main()
 {
-
     // tests::connection_test st;
     // st.run();
 
@@ -284,7 +283,7 @@ void mission_test::run()
     // Get home position
     mavlink_vehicles::global_pos_int home = this->mav->get_home_position_int();
 
-    std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(10000));
+    std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(1000));
 
     // Set mission target position
     mavlink_vehicles::local_pos target_local(30.0, 30.0, -10.0);
@@ -296,32 +295,27 @@ void mission_test::run()
     mavlink_vehicles::global_pos_int detour_global =
         mavlink_vehicles::math::local_ned_to_global(detour_local, home);
 
+    // Send detour target position
+    this->mav->send_detour_waypoint(detour_global);
+    std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(10000));
+
     // Send mission target position
     this->mav->send_mission_waypoint(target_global);
 
     // Wait for 5 seconds
     std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(5000));
 
-    // Send detour target position
-    // this->mav->send_detour_waypoint(detour_global);
-    // std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(5000));
-
     // Send Rotation command
-    this->mav->rotate(-140);
+    this->mav->brake(true);
 
     // Wait until the vehicle gets to the mission target
-    while(true) {
-        mavlink_vehicles::local_pos local = this->mav->get_local_position_ned();
-        std::cout << "Detour enabled: " << this->mav->is_detour_active()
-                  << std::endl;
-        std::cout << "Rotation enabled: " << this->mav->is_rotation_active()
-                  << std::endl;
-        std::cout << "Yaw: " << this->mav->get_attitude().yaw << std::endl;
-        std::cout << "[mission test] Local Position: " << local.x << ", "
-                  << local.y << ", " << local.z << std::endl;
+    while (true) {
+
+        // std::cout << "is braking: " << this->mav->is_brake_active()
+        // << std::endl;
 
         std::this_thread::sleep_for(
-            std::chrono::duration<int, std::milli>(500));
+            std::chrono::duration<int, std::milli>(100));
     }
 }
 
