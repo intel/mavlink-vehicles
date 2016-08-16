@@ -62,7 +62,7 @@ struct local_pos : state_variable {
 
 enum class status { STANDBY, ACTIVE };
 
-enum class mode { GUIDED, AUTO, OTHER };
+enum class mode { GUIDED, AUTO, BRAKE, OTHER };
 
 enum class arm_status { ARMED, NOT_ARMED };
 
@@ -72,6 +72,7 @@ enum class cmd_custom {
     HEARTBEAT,
     SET_MODE_GUIDED,
     SET_MODE_AUTO,
+    SET_MODE_BRAKE,
     REQUEST_MISSION_ITEM,
     ROTATE
 };
@@ -129,11 +130,17 @@ class mav_vehicle
     // rotation will be immediately aborted.
     void send_detour_waypoint(double lat, double lon, double alt);
     void send_detour_waypoint(global_pos_int global);
+    void send_detour_waypoint(global_pos_int global, bool autocontinue);
     bool is_detour_active() const;
 
-    // Command the vehicle to go immediately to the given waypoint
+    // Command the vehicle to go immediately to the given waypoint.
     void send_mission_waypoint(double lat, double lon, double alt);
     void send_mission_waypoint(global_pos_int global);
+
+    // Command the vehicle to brake immediately. The vehicle automatically
+    // continues the mission after achieving v=0 if autocontinue is true.
+    void brake(bool autocontinue);
+    bool is_brake_active() const;
 
   private:
     status stat;
@@ -143,6 +150,7 @@ class mav_vehicle
 
     attitude att;
     local_pos local;
+    local_pos speed;
     global_pos_int home;
     global_pos_int global;
 
@@ -154,10 +162,14 @@ class mav_vehicle
     bool is_sending_mission = false;
 
     global_pos_int detour_waypoint;
+    bool detour_waypoint_autocontinue = true;
     bool detour_active = false;
 
     float rotation_goal = 0;
     bool rotation_active = false;
+
+    bool brake_active = false;
+    bool autocontinue_after_brake = true;
 
     uint8_t system_id = 0;
     int sock = 0;

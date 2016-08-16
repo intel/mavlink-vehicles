@@ -54,6 +54,7 @@ const uint16_t remote_max_response_time_ms = 10000;
 const double waypoint_acceptance_radius_m = 0.01;
 const double detour_arrival_max_dist_m = 0.5;
 const double rotation_arrival_max_dif_deg = 10;
+const double is_stopped_max_speed_mps = 0.1;
 }
 
 namespace request_intervals_ms
@@ -184,9 +185,14 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mavlink_local_position_ned_t local_pos_ned;
         mavlink_msg_local_position_ned_decode(msg, &local_pos_ned);
         mav.local.timestamp = std::chrono::system_clock::now();
+        mav.speed.timestamp = std::chrono::system_clock::now();
         mav.local.x = local_pos_ned.x;
         mav.local.y = local_pos_ned.y;
         mav.local.z = local_pos_ned.z;
+        mav.speed.x = local_pos_ned.vx;
+        mav.speed.y = local_pos_ned.vy;
+        mav.speed.z = local_pos_ned.vz;
+        mav.speed.is_new = true;
         mav.local.is_new = true;
         return;
     }
@@ -367,13 +373,12 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mavlink_command_ack_t command_ack;
         mavlink_msg_command_ack_decode(msg, &command_ack);
 
-        // Check if a rotation has been initialized
+        // If we have sent a request to rotate, check if the rotation has been
+        // initialized
         if (command_ack.command == MAV_CMD_CONDITION_YAW &&
             command_ack.result == MAV_RESULT_ACCEPTED) {
             mav.rotation_goal =
                 std::fmod(mav.get_attitude().yaw - mav.rotation_goal, M_PI);
-            mav.rotation_active = true;
-            mav.detour_active = false;
             return;
         }
     }
@@ -492,6 +497,11 @@ global_pos_int mav_vehicle::get_detour_waypoint()
     return detour_waypoint_copy;
 }
 
+bool mav_vehicle::is_brake_active() const
+{
+    return this->brake_active;
+}
+
 bool mav_vehicle::is_detour_active() const
 {
     return this->detour_active;
@@ -556,7 +566,10 @@ void mav_vehicle::set_mode(mode m, int timeout)
         cmd = cmd_custom::SET_MODE_AUTO;
         break;
     }
-    case mode::OTHER:
+    case mode::BRAKE: {
+        cmd = cmd_custom::SET_MODE_BRAKE;
+        break;
+    }
     default:
         print_verbose("Trying to set unsupported mode");
         return;
@@ -601,11 +614,11 @@ void mav_vehicle::set_mode(mode m, int timeout)
 
         // Generate set mode mavlink message
         // Arducopter does not use the standard MAV_MODE_FLAG. It uses
-        // a custom mode instead. mode::GUIDED mode is defined as 4.
+        // a custom mode instead. AUTO mode is defined as 4.
         mavlink_message_t mav_msg;
         mavlink_set_mode_t mav_cmd_set_mode;
         mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
-        mav_cmd_set_mode.custom_mode = 3; // mode::GUIDED == 4
+        mav_cmd_set_mode.custom_mode = 3;
 
         // Encode and send
         uint8_t mav_data_buffer[defaults::send_buffer_len];
@@ -624,6 +637,32 @@ void mav_vehicle::set_mode(mode m, int timeout)
 
         print_verbose("Mode change to AUTO\n");
         break;
+    }
+    case mode::BRAKE: {
+        // Generate set mode mavlink message
+        // Arducopter does not use the standard MAV_MODE_FLAG. It uses
+        // a custom mode instead. mode::BRAKE mode is defined as 4.
+        mavlink_message_t mav_msg;
+        mavlink_set_mode_t mav_cmd_set_mode;
+        mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
+        mav_cmd_set_mode.custom_mode = 17;
+
+        // Encode and send
+        uint8_t mav_data_buffer[defaults::send_buffer_len];
+        mavlink_msg_set_mode_encode(this->system_id, defaults::component_id,
+                                    &mav_msg, &mav_cmd_set_mode);
+        int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
+        send_data(mav_data_buffer, n);
+
+        // Update timestamp
+        cmd_custom_timestamps[cmd] = system_clock::now();
+
+        if (send_data(mav_data_buffer, n) == -1) {
+            print_verbose("Error changing mode to BRAKE\n");
+            break;
+        }
+
+        print_verbose("Mode change to BRAKE\n");
     }
     case mode::OTHER:
         break;
@@ -687,15 +726,15 @@ void mav_vehicle::rotate(double angle_deg)
         return;
     }
 
+    // Make sure the value is in the interval [-360, +360]
+    angle_deg = std::fmod(angle_deg, 360);
+
     // Set rotation goal
     this->rotation_goal = math::deg2rad(angle_deg);
 
     // We need to make sure mode is set as GUIDED in order to send the rotation
     // command
     set_mode(mode::GUIDED, 0);
-
-    // Set a detour waypoint on the current position
-    // send_detour_waypoint(this->global);
 
     // Send the rotation command immediately
     send_cmd_long(MAV_CMD_CONDITION_YAW, fabs(angle_deg),
@@ -704,6 +743,11 @@ void mav_vehicle::rotate(double angle_deg)
 
     // Update timestamp
     cmd_custom_timestamps[cmd] = std::chrono::system_clock::now();
+
+    // Set rotation as active and disable any existent detours
+    this->detour_active = false;
+    this->rotation_active = true;
+    this->brake_active = false;
 
     print_verbose("Sending rotation command\n");
 }
@@ -742,10 +786,9 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp)
     // request the mission items one by one.
     send_mission_count(2);
 
-    // TODO: These flags preferably should be set on the CMD_ACK of this
-    // command and not here.
     this->detour_active = false;
     this->rotation_active = false;
+    this->brake_active = false;
 
     print_verbose("Mission started\n");
 
@@ -791,6 +834,19 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp, uint16_t seq)
     send_data(mav_data_buffer, n);
 }
 
+void mav_vehicle::brake(bool autocontinue)
+{
+    // Change mode to brake
+    set_mode(mode::BRAKE, 0);
+
+    this->autocontinue_after_brake = autocontinue;
+
+    this->brake_active = true;
+    this->rotation_active = false;
+
+    print_verbose("Brake started\n");
+}
+
 void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt)
 {
     global_pos_int wp;
@@ -802,6 +858,11 @@ void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt)
 }
 
 void mav_vehicle::send_detour_waypoint(global_pos_int wp)
+{
+    send_detour_waypoint(wp, true);
+}
+
+void mav_vehicle::send_detour_waypoint(global_pos_int wp, bool autocontinue)
 {
     mavlink_mission_item_t mav_waypoint;
 
@@ -842,12 +903,12 @@ void mav_vehicle::send_detour_waypoint(global_pos_int wp)
 
     // Store detour waypoint
     this->detour_waypoint = wp;
+    this->detour_waypoint_autocontinue = autocontinue;
 
     // Disable flags
-    this->rotation_active = false;
-
-    // Enable detour flag
     this->detour_active = true;
+    this->rotation_active = false;
+    this->brake_active = false;
 
     print_verbose("Detour started\n");
 }
@@ -1009,12 +1070,29 @@ void mav_vehicle::update()
             defaults::detour_arrival_max_dist_m) {
 
         // Finish detour
-        detour_active = false;
-
-        // Get back to AUTO mode to continue the mission
-        set_mode(mode::AUTO, 0);
+        this->detour_active = false;
 
         print_verbose("Detour finished\n");
+
+        // Get back to AUTO mode to continue the mission
+        if (this->detour_waypoint_autocontinue) {
+            set_mode(mode::AUTO, 0);
+        }
+    }
+
+    // Check if a brake has finished in order to continue the mission
+    if (is_brake_active() &&
+        fabs(speed.x) <= defaults::is_stopped_max_speed_mps &&
+        fabs(speed.x) <= defaults::is_stopped_max_speed_mps &&
+        fabs(speed.z) <= defaults::is_stopped_max_speed_mps) {
+
+        this->brake_active = false;
+
+        if(this->autocontinue_after_brake) {
+            set_mode(mode::AUTO, 0);
+        }
+
+        print_verbose("Brake finished\n");
     }
 
     // Check if a rotation has been finished in order to continue the mission
@@ -1023,7 +1101,7 @@ void mav_vehicle::update()
          math::deg2rad(defaults::rotation_arrival_max_dif_deg))) {
 
         // Finish rotation
-        rotation_active = false;
+        this->rotation_active = false;
 
         // Get back to AUTO mode to continue the mission
         set_mode(mode::AUTO, 0);
