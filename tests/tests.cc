@@ -125,21 +125,14 @@ void connection_test::show_mav_state()
         return;
     }
 
-    mavlink_vehicles::status stat = this->mav->get_status();
-
     mavlink_vehicles::mode mod = this->mav->get_mode();
-
+    mavlink_vehicles::status stat = this->mav->get_status();
     mavlink_vehicles::attitude att = this->mav->get_attitude();
-
+    mavlink_vehicles::gps_status gps = this->mav->get_gps_status();
+    mavlink_vehicles::local_pos local = this->mav->get_local_position_ned();
     mavlink_vehicles::global_pos_int home = this->mav->get_home_position_int();
-
     mavlink_vehicles::global_pos_int global =
         this->mav->get_global_position_int();
-
-    mavlink_vehicles::local_pos local = this->mav->get_local_position_ned();
-
-    mavlink_vehicles::gps_status gps = this->mav->get_gps_status();
-
     mavlink_vehicles::global_pos_int target_pos_global =
         this->mav->get_mission_waypoint();
 
@@ -147,29 +140,24 @@ void connection_test::show_mav_state()
         mavlink_vehicles::math::global_to_local_ned(target_pos_global, home);
 
     std::cout << "[connection test] Status: " << (int)stat << std::endl;
-
     std::cout << "[connection test] Mode: " << (int)mod << std::endl;
 
     if (home.is_initialized()) {
         std::cout << "[connection test] Home Position: " << home.lat << ", "
                   << home.lon << ", " << home.alt << std::endl;
     }
-
     if (att.is_initialized()) {
         std::cout << "[connection test] Attitude: " << att.roll << ", "
                   << att.pitch << ", " << att.yaw << std::endl;
     }
-
     if (global.is_initialized()) {
         std::cout << "[connection test] Global Position: " << global.lat << ", "
                   << global.lon << ", " << global.alt << std::endl;
     }
-
     if (local.is_initialized()) {
         std::cout << "[connection test] Local Position: " << local.x << ", "
                   << local.y << ", " << local.z << std::endl;
     }
-
     if (target_pos_global.is_initialized()) {
         std::cout << "[connection test] Target Position Global: "
                   << target_pos_global.lat << ", " << target_pos_global.lon
@@ -178,7 +166,6 @@ void connection_test::show_mav_state()
         std::cout << "[connection test] Target Position: " << target_pos.x
                   << ", " << target_pos.y << ", " << target_pos.z << std::endl;
     }
-
     std::cout << "[connection test] Gps: " << (int)gps << std::endl;
 }
 
@@ -310,10 +297,6 @@ void mission_test::run()
 
     // Wait until the vehicle gets to the mission target
     while (true) {
-
-        // std::cout << "is braking: " << this->mav->is_brake_active()
-        // << std::endl;
-
         std::this_thread::sleep_for(
             std::chrono::duration<int, std::milli>(100));
     }
@@ -325,6 +308,5 @@ void mission_test::update()
         this->mav->update();
     }
 }
-
 }
 
