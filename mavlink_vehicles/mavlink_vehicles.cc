@@ -282,7 +282,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
 
         // If we are not sending a mission or if the mission item requested is
         // not within our mission size, simply ignore it.
-        if (!mav.is_sending_mission ||
+        if (!mav.is_sending_mission() ||
             mission_request.seq >= mav.mission_items_list.size()) {
             return;
         }
@@ -303,10 +303,11 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
 
         // If the target of the ACK is our system and if we have been sending a
         // mission list, then it means that the list has been fully received by
-        // the vehicle and that we can request a mission start.
-        if (ack.target_system == mav.system_id && mav.is_sending_mission) {
+        // the vehicle and that we can request a mission start if no other
+        // command is currently overriding it.
+        if (ack.target_system == mav.system_id && mav.is_sending_mission()) {
             mav.set_mode(mode::AUTO, 0);
-            mav.is_sending_mission = false;
+            mav.sending_mission = false;
         }
         return;
     }
@@ -377,8 +378,6 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         // initialized
         if (command_ack.command == MAV_CMD_CONDITION_YAW &&
             command_ack.result == MAV_RESULT_ACCEPTED) {
-            mav.rotation_goal =
-                std::fmod(mav.get_attitude().yaw - mav.rotation_goal, M_PI);
             return;
         }
     }
@@ -507,6 +506,11 @@ bool mav_vehicle::is_detour_active() const
     return this->detour_active;
 }
 
+bool mav_vehicle::is_sending_mission() const
+{
+    return this->sending_mission;
+}
+
 gps_status mav_vehicle::get_gps_status() const
 {
     return gps;
@@ -575,10 +579,9 @@ void mav_vehicle::set_mode(mode m, int timeout)
         return;
     }
 
-    // Check if cmd_custom::SET_MODE_GUIDED has been sent recently
+    // Check if command has been sent recently
     if (cmd_custom_timestamps.count(cmd) &&
-        !is_timedout(cmd_custom_timestamps[cmd],
-                     request_intervals_ms::set_mode)) {
+        !is_timedout(cmd_custom_timestamps[cmd], timeout)) {
         return;
     }
 
@@ -663,6 +666,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
         }
 
         print_verbose("Mode change to BRAKE\n");
+        break;
     }
     case mode::OTHER:
         break;
@@ -730,7 +734,16 @@ void mav_vehicle::rotate(double angle_deg)
     angle_deg = std::fmod(angle_deg, 360);
 
     // Set rotation goal
-    this->rotation_goal = math::deg2rad(angle_deg);
+    this->rotation_change = -math::deg2rad(angle_deg);
+
+    this->rotation_goal = std::fmod(
+        (this->get_attitude().yaw + this->rotation_change), (2 * M_PI));
+
+    if (this->rotation_goal > M_PI) {
+        this->rotation_goal = this->rotation_goal - 2 * M_PI;
+    } else if (this->rotation_goal < -M_PI) {
+        this->rotation_goal = this->rotation_goal + 2 * M_PI;
+    }
 
     // We need to make sure mode is set as GUIDED in order to send the rotation
     // command
@@ -792,7 +805,7 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp)
 
     print_verbose("Mission started\n");
 
-    this->is_sending_mission = true;
+    this->sending_mission = true;
 }
 
 void mav_vehicle::send_mission_waypoint(global_pos_int wp, uint16_t seq)
@@ -1083,12 +1096,13 @@ void mav_vehicle::update()
     // Check if a brake has finished in order to continue the mission
     if (is_brake_active() &&
         fabs(speed.x) <= defaults::is_stopped_max_speed_mps &&
-        fabs(speed.x) <= defaults::is_stopped_max_speed_mps &&
+        fabs(speed.y) <= defaults::is_stopped_max_speed_mps &&
         fabs(speed.z) <= defaults::is_stopped_max_speed_mps) {
 
         this->brake_active = false;
 
         if(this->autocontinue_after_brake) {
+            print_verbose("Autocontinuing\n");
             set_mode(mode::AUTO, 0);
         }
 
@@ -1106,7 +1120,8 @@ void mav_vehicle::update()
         // Get back to AUTO mode to continue the mission
         set_mode(mode::AUTO, 0);
 
-        print_verbose("Rotation finished\n");
+        print_verbose("Rotation finished: yaw, goal: y%f, g%f, c%f\n",
+                      get_attitude().yaw, this->rotation_goal, this->rotation_change);
     }
 }
 

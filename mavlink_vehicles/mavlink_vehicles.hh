@@ -136,6 +136,7 @@ class mav_vehicle
     // Command the vehicle to go immediately to the given waypoint.
     void send_mission_waypoint(double lat, double lon, double alt);
     void send_mission_waypoint(global_pos_int global);
+    bool is_sending_mission() const;
 
     // Command the vehicle to brake immediately. The vehicle automatically
     // continues the mission after achieving v=0 if autocontinue is true.
@@ -159,13 +160,14 @@ class mav_vehicle
     bool curr_mission_item_outdated = true;
 
     std::vector<global_pos_int> mission_items_list;
-    bool is_sending_mission = false;
+    bool sending_mission = false;
 
     global_pos_int detour_waypoint;
     bool detour_waypoint_autocontinue = true;
     bool detour_active = false;
 
     float rotation_goal = 0;
+    float rotation_change = 0;
     bool rotation_active = false;
 
     bool brake_active = false;
