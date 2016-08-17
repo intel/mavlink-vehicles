@@ -238,10 +238,10 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         }
 
         switch (hb.custom_mode) {
-        case 3:
+        case 3: // ArduCopter AUTO
             mav.base_mode = mode::AUTO;
             break;
-        case 4:
+        case 4: // ArduCopter GUIDED
             mav.base_mode = mode::GUIDED;
             break;
         }
@@ -773,8 +773,13 @@ bool mav_vehicle::is_rotation_active() const
 void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt)
 {
     global_pos_int wp;
+
+    // Converting from floating point to fixed-point-1e7
     wp.lat = lat * 1e7;
     wp.lon = lon * 1e7;
+
+    // Converting from floating point to fixed-point-1e3
+    // Also converting altitude from relative to AMSL
     wp.alt = alt * 1e3 + double(this->home.alt);
 
     send_mission_waypoint(wp);
@@ -890,11 +895,11 @@ void mav_vehicle::send_detour_waypoint(global_pos_int wp, bool autocontinue)
     // Arducopter supports only MAV_FRAME_GLOBAL_RELATIVE_ALT.
     mav_waypoint.frame = MAV_FRAME_GLOBAL_RELATIVE_ALT;
 
-    // Set coordinates in Degrees according to frame and message type
+    // Coordinates in floating-point degrees according to frame and msg type
     mav_waypoint.x = double(wp.lat) / 1e7f;
     mav_waypoint.y = double(wp.lon) / 1e7f;
 
-    // Set relative altitude in meters according to frame
+    // Relative alt. in floating-point meters according to frame and msg type
     mav_waypoint.z = double(wp.alt - this->home.alt) / 1e3f;
 
     // Set params
