@@ -80,6 +80,9 @@ connection_test::connection_test()
 
 connection_test::~connection_test()
 {
+    this->send_recv_thread_run = false;
+    this->send_recv_thread.join();
+    close(this->sock);
 }
 
 void connection_test::run()
@@ -245,6 +248,9 @@ mission_test::mission_test()
 
 mission_test::~mission_test()
 {
+    this->send_recv_thread_run = false;
+    this->send_recv_thread.join();
+    close(this->sock);
 }
 
 void mission_test::run()
