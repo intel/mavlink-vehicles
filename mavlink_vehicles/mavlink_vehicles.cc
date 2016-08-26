@@ -498,12 +498,12 @@ global_pos_int mav_vehicle::get_detour_waypoint()
 
 bool mav_vehicle::is_brake_active() const
 {
-    return this->brake_active;
+    return this->mstatus == mission_status::BRAKING;
 }
 
 bool mav_vehicle::is_detour_active() const
 {
-    return this->detour_active;
+    return this->mstatus == mission_status::DETOURING;
 }
 
 bool mav_vehicle::is_sending_mission() const
@@ -757,17 +757,15 @@ void mav_vehicle::rotate(double angle_deg)
     // Update timestamp
     cmd_custom_timestamps[cmd] = std::chrono::system_clock::now();
 
-    // Set rotation as active and disable any existent detours
-    this->detour_active = false;
-    this->rotation_active = true;
-    this->brake_active = false;
+    // Set rotation as active
+    this->mstatus = mission_status::ROTATING;
 
     print_verbose("Sending rotation command\n");
 }
 
 bool mav_vehicle::is_rotation_active() const
 {
-    return this->rotation_active;
+    return this->mstatus == mission_status::DETOURING;
 }
 
 void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt)
@@ -804,9 +802,8 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp)
     // request the mission items one by one.
     send_mission_count(2);
 
-    this->detour_active = false;
-    this->rotation_active = false;
-    this->brake_active = false;
+    // Set mission mode as normal
+    this->mstatus = mission_status::NORMAL;
 
     print_verbose("Mission started\n");
 
@@ -859,8 +856,8 @@ void mav_vehicle::brake(bool autocontinue)
 
     this->autocontinue_after_brake = autocontinue;
 
-    this->brake_active = true;
-    this->rotation_active = false;
+    // Set braking as active
+    this->mstatus = mission_status::BRAKING;
 
     print_verbose("Brake started\n");
 }
@@ -923,10 +920,8 @@ void mav_vehicle::send_detour_waypoint(global_pos_int wp, bool autocontinue)
     this->detour_waypoint = wp;
     this->detour_waypoint_autocontinue = autocontinue;
 
-    // Disable flags
-    this->detour_active = true;
-    this->rotation_active = false;
-    this->brake_active = false;
+    // Set detour as active
+    this->mstatus = mission_status::DETOURING;
 
     print_verbose("Detour started\n");
 }
@@ -1087,8 +1082,8 @@ void mav_vehicle::update()
         fabs(math::dist(detour_waypoint, get_global_position_int())) <=
             defaults::detour_arrival_max_dist_m) {
 
-        // Finish detour
-        this->detour_active = false;
+        // Get back to normal mode, finishing the detour
+        this->mstatus = mission_status::NORMAL;
 
         print_verbose("Detour finished\n");
 
@@ -1104,7 +1099,8 @@ void mav_vehicle::update()
         fabs(speed.y) <= defaults::is_stopped_max_speed_mps &&
         fabs(speed.z) <= defaults::is_stopped_max_speed_mps) {
 
-        this->brake_active = false;
+        // Get back to normal mode, disabling brakes
+        this->mstatus = mission_status::NORMAL;
 
         if(this->autocontinue_after_brake) {
             print_verbose("Autocontinuing\n");
@@ -1119,8 +1115,8 @@ void mav_vehicle::update()
         (fabs(get_attitude().yaw - this->rotation_goal) <=
          math::deg2rad(defaults::rotation_arrival_max_dif_deg))) {
 
-        // Finish rotation
-        this->rotation_active = false;
+        // Get back to normal mode, disabling rotation
+        this->mstatus = mission_status::NORMAL;
 
         // Get back to AUTO mode to continue the mission
         set_mode(mode::AUTO, 0);
