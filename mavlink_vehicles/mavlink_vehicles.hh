@@ -77,6 +77,13 @@ enum class cmd_custom {
     ROTATE
 };
 
+enum class mission_status {
+    BRAKING,
+    DETOURING,
+    ROTATING,
+    NORMAL
+};
+
 class msghandler;
 
 namespace math
@@ -162,15 +169,14 @@ class mav_vehicle
     std::vector<global_pos_int> mission_items_list;
     bool sending_mission = false;
 
+    mission_status mstatus = mission_status::NORMAL;
+
     global_pos_int detour_waypoint;
     bool detour_waypoint_autocontinue = true;
-    bool detour_active = false;
 
     float rotation_goal = 0;
     float rotation_change = 0;
-    bool rotation_active = false;
 
-    bool brake_active = false;
     bool autocontinue_after_brake = true;
 
     uint8_t system_id = 0;
