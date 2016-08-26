@@ -590,7 +590,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
 
         // Generate set mode mavlink message
         // Arducopter does not use the standard MAV_MODE_FLAG. It uses
-        // a custom mode instead. mode::GUIDED mode is defined as 4.
+        // a custom mode instead. GUIDED mode is defined as 4.
         mavlink_message_t mav_msg;
         mavlink_set_mode_t mav_cmd_set_mode;
         mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
@@ -617,7 +617,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
 
         // Generate set mode mavlink message
         // Arducopter does not use the standard MAV_MODE_FLAG. It uses
-        // a custom mode instead. AUTO mode is defined as 4.
+        // a custom mode instead. AUTO mode is defined as 3.
         mavlink_message_t mav_msg;
         mavlink_set_mode_t mav_cmd_set_mode;
         mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
@@ -644,7 +644,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
     case mode::BRAKE: {
         // Generate set mode mavlink message
         // Arducopter does not use the standard MAV_MODE_FLAG. It uses
-        // a custom mode instead. mode::BRAKE mode is defined as 4.
+        // a custom mode instead. BRAKE mode is defined as 17.
         mavlink_message_t mav_msg;
         mavlink_set_mode_t mav_cmd_set_mode;
         mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
