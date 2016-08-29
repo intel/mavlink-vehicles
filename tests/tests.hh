@@ -54,7 +54,7 @@ class mission_test
     mission_test();
     ~mission_test();
 
-    void run();
+    bool run();
 
   private:
     int sock = 0;
