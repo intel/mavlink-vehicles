@@ -45,6 +45,8 @@ namespace tests
 namespace defaults
 {
 const uint16_t mavproxy_port = 14557;
+const uint32_t mission_timeout_ms = 30e3;
+const double arrival_max_dist_m = 0.5;
 }
 
 connection_test::connection_test()
@@ -214,7 +216,6 @@ void conversion_test::run()
     }
 }
 
-
 mission_test::mission_test()
 {
     // Socket Initialization
@@ -253,7 +254,7 @@ mission_test::~mission_test()
     close(this->sock);
 }
 
-void mission_test::run()
+bool mission_test::run()
 {
 
     // Initialize mavlink_vehicles update thread
@@ -302,9 +303,25 @@ void mission_test::run()
     this->mav->brake(true);
 
     // Wait until the vehicle gets to the mission target
+    std::chrono::time_point<std::chrono::system_clock> mission_start_time =
+        std::chrono::system_clock::now();
     while (true) {
         std::this_thread::sleep_for(
             std::chrono::duration<int, std::milli>(100));
+
+        // The vehicle has arrived at the mission waypoint
+        if (mavlink_vehicles::math::dist(
+                target_global, this->mav->get_global_position_int()) <=
+            defaults::arrival_max_dist_m) {
+            return true;
+        }
+
+        // The vehicle has not arrived at the mission waypoint in time
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now() - mission_start_time)
+                .count() > defaults::mission_timeout_ms) {
+            return false;
+        }
     }
 }
 
