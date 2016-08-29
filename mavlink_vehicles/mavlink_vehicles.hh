@@ -135,9 +135,9 @@ class mav_vehicle
     // waypoint before moving to the next mission waypoint. If the vehicle is
     // currently currently rotating because of a previous rotate() command, the
     // rotation will be immediately aborted.
-    void send_detour_waypoint(double lat, double lon, double alt);
-    void send_detour_waypoint(global_pos_int global);
-    void send_detour_waypoint(global_pos_int global, bool autocontinue);
+    void send_detour_waypoint(double lat, double lon, double alt,
+                              bool autocontinue = true);
+    void send_detour_waypoint(global_pos_int global, bool autocontinue = true);
     bool is_detour_active() const;
 
     // Command the vehicle to go immediately to the given waypoint.

@@ -862,7 +862,8 @@ void mav_vehicle::brake(bool autocontinue)
     print_verbose("Brake started\n");
 }
 
-void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt)
+void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt,
+                                       bool autocontinue)
 {
     global_pos_int wp;
     wp.lat = lat * 1e7;
@@ -872,12 +873,8 @@ void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt)
     send_detour_waypoint(wp);
 }
 
-void mav_vehicle::send_detour_waypoint(global_pos_int wp)
-{
-    send_detour_waypoint(wp, true);
-}
-
-void mav_vehicle::send_detour_waypoint(global_pos_int wp, bool autocontinue)
+void mav_vehicle::send_detour_waypoint(global_pos_int wp,
+                                       bool autocontinue)
 {
     mavlink_mission_item_t mav_waypoint;
 
