@@ -62,8 +62,8 @@ connection_test::connection_test()
     local_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     local_addr.sin_port = htons(defaults::mavproxy_port);
 
-    if (bind(sock, (struct sockaddr *)&local_addr, sizeof(struct sockaddr)) ==
-        -1) {
+    if (bind(sock, (struct sockaddr *)&local_addr,
+                    sizeof(struct sockaddr)) == -1) {
         perror("error bind failed");
         close(sock);
         exit(EXIT_FAILURE);
