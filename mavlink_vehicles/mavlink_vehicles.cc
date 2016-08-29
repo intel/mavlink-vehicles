@@ -765,7 +765,7 @@ void mav_vehicle::rotate(double angle_deg)
 
 bool mav_vehicle::is_rotation_active() const
 {
-    return this->mstatus == mission_status::DETOURING;
+    return this->mstatus == mission_status::ROTATING;
 }
 
 void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt)
