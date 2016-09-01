@@ -52,9 +52,10 @@ const float lookat_rot_speed_degps = 90.0;
 const size_t send_buffer_len = 2041;
 const uint16_t remote_max_response_time_ms = 10000;
 const double waypoint_acceptance_radius_m = 0.01;
-const double detour_arrival_max_dist_m = 0.5;
-const double rotation_arrival_max_dif_deg = 10;
-const double is_stopped_max_speed_mps = 0.1;
+const double arrival_max_dist_m = 0.5;
+const double rotation_arrival_max_dif_deg = 10.0;
+const double autorotate_max_targ_angle = 20.0;
+const double is_stopped_max_speed_mps = 0.3;
 }
 
 namespace request_intervals_ms
@@ -65,7 +66,7 @@ const uint16_t arm_disarm = 1000;
 const uint16_t heartbeat = 1000;
 const uint16_t set_mode = 1000;
 const uint16_t takeoff = 1000;
-const uint16_t rotate = 1000;
+const uint16_t rotate = 200;
 }
 
 bool is_timedout(std::chrono::time_point<std::chrono::system_clock> timestamp,
@@ -169,6 +170,30 @@ double dist(global_pos_int p1, global_pos_int p2)
 {
     local_pos res = global_to_local_ned(p1, p2);
     return sqrt(res.x * res.x + res.y * res.y + res.z * res.z);
+}
+
+double get_waypoint_rel_angle(global_pos_int wp_pos, global_pos_int ref_pos,
+                              attitude ref_att)
+{
+    local_pos wp_rel = global_to_local_ned(wp_pos, ref_pos);
+
+    // Calculate relative angle
+    double wp_angle = math::rad2deg(atan2(wp_rel.y, wp_rel.x));
+
+    // While yaw follow NED convention, wp_angle is calculated according to ENU
+    // conventions. We need to follow the same convention before subracting them
+    // up to calculate the relative angle.
+    wp_angle = -wp_angle + 90.0;
+
+    double wp_rel_angle = rad2deg(ref_att.yaw) - wp_angle;
+
+    if (wp_rel_angle > 180.0) {
+        wp_rel_angle = wp_rel_angle - 360.0;
+    } else if (wp_rel_angle < -180.0) {
+        wp_rel_angle = wp_rel_angle + 360.0;
+    }
+
+    return wp_rel_angle;
 }
 }
 
@@ -306,7 +331,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         // A MISSION_ACK has been broadcast what means that the mission might
         // have changed, and so, our currently stored mission item might be
         // outdated.
-        mav.curr_mission_item_outdated = true;
+        mav.mission_waypoint_outdated = true;
         print_verbose("Mission waypoint outdated\n");
 
         return;
@@ -317,9 +342,9 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
 
         // If the current mission item id has changes our currently stored
         // mission item might be outdated.
-        if (mav.curr_mission_item_id != mission_current.seq) {
-            mav.curr_mission_item_id = mission_current.seq;
-            mav.curr_mission_item_outdated = true;
+        if (mav.mission_waypoint_id != mission_current.seq) {
+            mav.mission_waypoint_id = mission_current.seq;
+            mav.mission_waypoint_outdated = true;
         }
         return;
     }
@@ -363,9 +388,9 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
 
         // Retrieve current mission item data converting from
         // global-relative-alt to global
-        if (mav.curr_mission_item_id == mission_item.seq) {
-            mav.curr_mission_item_pos = global_mission_item;
-            mav.curr_mission_item_outdated = false;
+        if (mav.mission_waypoint_id == mission_item.seq) {
+            mav.mission_waypoint = global_mission_item;
+            mav.mission_waypoint_outdated = false;
             print_verbose("Mission waypoint updated\n");
         }
         return;
@@ -484,9 +509,9 @@ global_pos_int mav_vehicle::get_global_position_int()
 
 global_pos_int mav_vehicle::get_mission_waypoint()
 {
-    global_pos_int curr_mission_item_pos_copy = this->curr_mission_item_pos;
-    this->curr_mission_item_pos.is_new = false;
-    return curr_mission_item_pos_copy;
+    global_pos_int mission_waypoint_copy = this->mission_waypoint;
+    this->mission_waypoint.is_new = false;
+    return mission_waypoint_copy;
 }
 
 global_pos_int mav_vehicle::get_detour_waypoint()
@@ -1097,14 +1122,14 @@ void mav_vehicle::update()
     }
 
     // Check if mission has changed
-    if (this->curr_mission_item_outdated) {
-        request_mission_item(this->curr_mission_item_id);
+    if (this->mission_waypoint_outdated) {
+        request_mission_item(this->mission_waypoint_id);
     }
 
     // Check if a detour has been finished in order to continue the mission
     if (is_detour_active() &&
         fabs(math::dist(detour_waypoint, get_global_position_int())) <=
-            defaults::detour_arrival_max_dist_m) {
+            defaults::arrival_max_dist_m) {
 
         // Get back to normal mode, finishing the detour
         this->mstatus = mission_status::NORMAL;
@@ -1158,6 +1183,30 @@ void mav_vehicle::update()
                 set_mode(mode::AUTO, 0);
                 break;
             }
+        }
+    }
+
+    // Check if autorotation is active in order to request rotation if needed,
+    // if not already rotating. Need also to make sure that a mission waypoint
+    // is not currently being sent.
+    if (this->waypoint_autorotate &&
+        (this->mstatus == mission_status::NORMAL ||
+         this->mstatus == mission_status::DETOURING) &&
+        !this->sending_mission) {
+
+        // Get the rotation angle to the detour or mission waypoint
+        global_pos_int target_pos = this->mission_waypoint;
+        if (this->mstatus == mission_status::DETOURING) {
+            target_pos = detour_waypoint;
+        }
+        double target_angle =
+            math::get_waypoint_rel_angle(target_pos, global, att);
+
+        // Rotate if not too close to target and if looking far away.
+        if (fabs(target_angle) > defaults::autorotate_max_targ_angle &&
+            fabs(math::ground_dist(target_pos, get_global_position_int())) >
+                defaults::arrival_max_dist_m) {
+            rotate(target_angle, true);
         }
     }
 }

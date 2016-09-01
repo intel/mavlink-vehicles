@@ -95,6 +95,8 @@ double ground_dist(global_pos_int p1, global_pos_int p2);
 double ground_dist(local_pos p1, local_pos p2);
 local_pos global_to_local_ned(global_pos_int point, global_pos_int reference);
 global_pos_int local_ned_to_global(local_pos point, global_pos_int reference);
+double get_waypoint_rel_angle(global_pos_int wp_pos, global_pos_int ref_pos,
+                              attitude ref_att);
 }
 
 class mav_vehicle
@@ -162,9 +164,9 @@ class mav_vehicle
     global_pos_int home;
     global_pos_int global;
 
-    global_pos_int curr_mission_item_pos;
-    uint16_t curr_mission_item_id = 0;
-    bool curr_mission_item_outdated = true;
+    global_pos_int mission_waypoint;
+    uint16_t mission_waypoint_id = 0;
+    bool mission_waypoint_outdated = true;
 
     std::vector<global_pos_int> mission_items_list;
     bool sending_mission = false;
