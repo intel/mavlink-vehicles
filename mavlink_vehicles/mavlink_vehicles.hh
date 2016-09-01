@@ -126,23 +126,23 @@ class mav_vehicle
     void request_mission_item(uint16_t item_id);
 
     // Command the vehicle to immediately stop and rotate before moving to the
-    // next mission waypoint. If the vehicle is currently taking a detour, that
-    // detour will be immediately aborted.
-    void rotate(double angle_deg);
+    // next detour or mission waypoint.
+    void rotate(double angle_deg, bool autocontinue = true);
     bool is_rotation_active() const;
 
     // Command the vehicle to immediately take a detour through the given
-    // waypoint before moving to the next mission waypoint. If the vehicle is
-    // currently currently rotating because of a previous rotate() command, the
-    // rotation will be immediately aborted.
+    // waypoint before moving to the next mission waypoint.
     void send_detour_waypoint(double lat, double lon, double alt,
-                              bool autocontinue = true);
-    void send_detour_waypoint(global_pos_int global, bool autocontinue = true);
+                              bool autocontinue = true,
+                              bool autorotate = false);
+    void send_detour_waypoint(global_pos_int global, bool autocontinue = true,
+                              bool autorotate = false);
     bool is_detour_active() const;
 
     // Command the vehicle to go immediately to the given waypoint.
-    void send_mission_waypoint(double lat, double lon, double alt);
-    void send_mission_waypoint(global_pos_int global);
+    void send_mission_waypoint(double lat, double lon, double alt,
+                               bool autorotate = false);
+    void send_mission_waypoint(global_pos_int global, bool autorotate = false);
     bool is_sending_mission() const;
 
     // Command the vehicle to brake immediately. The vehicle automatically
@@ -173,11 +173,14 @@ class mav_vehicle
 
     global_pos_int detour_waypoint;
     bool detour_waypoint_autocontinue = true;
+    bool waypoint_autorotate = false;
 
     float rotation_goal = 0;
     float rotation_change = 0;
 
     bool autocontinue_after_brake = true;
+    bool autocontinue_after_rotation = false;
+    mission_status autocontinue_action = mission_status::NORMAL;
 
     uint8_t system_id = 0;
     int sock = 0;
