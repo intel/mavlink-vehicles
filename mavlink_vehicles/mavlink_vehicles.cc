@@ -871,7 +871,7 @@ void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt,
     wp.lon = lon * 1e7;
     wp.alt = alt * 1e3 + double(this->home.alt);
 
-    send_detour_waypoint(wp);
+    send_detour_waypoint(wp, autocontinue);
 }
 
 void mav_vehicle::send_detour_waypoint(global_pos_int wp,
