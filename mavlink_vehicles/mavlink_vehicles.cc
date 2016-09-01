@@ -719,7 +719,7 @@ void mav_vehicle::takeoff()
                   defaults::takeoff_init_alt_m, request_intervals_ms::takeoff);
 }
 
-void mav_vehicle::rotate(double angle_deg)
+void mav_vehicle::rotate(double angle_deg, bool autocontinue)
 {
     print_verbose("Rotation command received\n");
     cmd_custom cmd = cmd_custom::ROTATE;
@@ -758,8 +758,22 @@ void mav_vehicle::rotate(double angle_deg)
     // Update timestamp
     cmd_custom_timestamps[cmd] = std::chrono::system_clock::now();
 
+    // Check what we are doing, in order to the current action saved to
+    // autocontinue.
+    switch (this->mstatus) {
+    case mission_status::DETOURING:
+        this->autocontinue_action = mission_status::DETOURING;
+        break;
+    default:
+        this->autocontinue_action = mission_status::NORMAL;
+        break;
+    }
+
     // Set rotation as active
     this->mstatus = mission_status::ROTATING;
+
+    // Set autocontinue
+    this->autocontinue_after_rotation = autocontinue;
 
     print_verbose("Rotation started\n");
 }
@@ -769,7 +783,8 @@ bool mav_vehicle::is_rotation_active() const
     return this->mstatus == mission_status::ROTATING;
 }
 
-void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt)
+void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt,
+                                        bool autorotate)
 {
     global_pos_int wp;
 
@@ -781,10 +796,10 @@ void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt)
     // Also converting altitude from relative to AMSL
     wp.alt = alt * 1e3 + double(this->home.alt);
 
-    send_mission_waypoint(wp);
+    send_mission_waypoint(wp, autorotate);
 }
 
-void mav_vehicle::send_mission_waypoint(global_pos_int wp)
+void mav_vehicle::send_mission_waypoint(global_pos_int wp, bool autorotate)
 {
     print_verbose("New mission received\n");
 
@@ -809,6 +824,7 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp)
     this->mstatus = mission_status::NORMAL;
 
     this->sending_mission = true;
+    this->waypoint_autorotate = autorotate;
 }
 
 void mav_vehicle::send_mission_waypoint(global_pos_int wp, uint16_t seq)
@@ -857,6 +873,16 @@ void mav_vehicle::brake(bool autocontinue)
 
     this->autocontinue_after_brake = autocontinue;
 
+    // Save the current state to get back to it after braking.
+    switch (this->mstatus) {
+    case mission_status::DETOURING:
+        this->autocontinue_action = mission_status::DETOURING;
+        break;
+    default:
+        this->autocontinue_action = mission_status::NORMAL;
+        break;
+    }
+
     // Set braking as active
     this->mstatus = mission_status::BRAKING;
 
@@ -864,18 +890,18 @@ void mav_vehicle::brake(bool autocontinue)
 }
 
 void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt,
-                                       bool autocontinue)
+                                       bool autocontinue, bool autorotate)
 {
     global_pos_int wp;
     wp.lat = lat * 1e7;
     wp.lon = lon * 1e7;
     wp.alt = alt * 1e3 + double(this->home.alt);
 
-    send_detour_waypoint(wp, autocontinue);
+    send_detour_waypoint(wp, autocontinue, autorotate);
 }
 
-void mav_vehicle::send_detour_waypoint(global_pos_int wp,
-                                       bool autocontinue)
+void mav_vehicle::send_detour_waypoint(global_pos_int wp, bool autocontinue,
+                                       bool autorotate)
 {
     mavlink_mission_item_t mav_waypoint;
 
@@ -1097,15 +1123,21 @@ void mav_vehicle::update()
         fabs(speed.y) <= defaults::is_stopped_max_speed_mps &&
         fabs(speed.z) <= defaults::is_stopped_max_speed_mps) {
 
-        // Get back to normal mode, disabling brakes
+        print_verbose("Brake finished\n");
         this->mstatus = mission_status::NORMAL;
 
-        if(this->autocontinue_after_brake) {
+        if (this->autocontinue_after_brake) {
             print_verbose("Autocontinuing\n");
-            set_mode(mode::AUTO, 0);
+            switch (this->autocontinue_action) {
+            case mission_status::DETOURING:
+                send_detour_waypoint(this->detour_waypoint);
+                break;
+            default:
+                set_mode(mode::AUTO, 0);
+                break;
+            }
         }
 
-        print_verbose("Brake finished\n");
     }
 
     // Check if a rotation has been finished in order to continue the mission
@@ -1113,13 +1145,20 @@ void mav_vehicle::update()
         (fabs(get_attitude().yaw - this->rotation_goal) <=
          math::deg2rad(defaults::rotation_arrival_max_dif_deg))) {
 
-        // Get back to normal mode, disabling rotation
+        print_verbose("Rotation finished\n");
         this->mstatus = mission_status::NORMAL;
 
-        // Get back to AUTO mode to continue the mission
-        set_mode(mode::AUTO, 0);
-
-        print_verbose("Rotation finished\n");
+        if (this->autocontinue_after_rotation) {
+            print_verbose("Autocontinuing\n");
+            switch (this->autocontinue_action) {
+            case mission_status::DETOURING:
+                send_detour_waypoint(this->detour_waypoint);
+                break;
+            default:
+                set_mode(mode::AUTO, 0);
+                break;
+            }
+        }
     }
 }
 
