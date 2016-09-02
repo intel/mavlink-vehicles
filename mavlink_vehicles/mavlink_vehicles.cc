@@ -871,6 +871,10 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp, uint16_t seq)
     // Set relative altitude in meters according to frame
     mav_waypoint.z = (wp.alt - double(this->home.alt)) / 1e3f;
 
+    // Too low altitudes are not allowed by ArduCopter because of possible
+    // crash landings.
+    mav_waypoint.z = fmax(0.1, mav_waypoint.z);
+
     // Set sequence number
     mav_waypoint.seq = seq;
 
@@ -947,6 +951,10 @@ void mav_vehicle::send_detour_waypoint(global_pos_int wp, bool autocontinue,
 
     // Relative alt. in floating-point meters according to frame and msg type
     mav_waypoint.z = double(wp.alt - this->home.alt) / 1e3f;
+
+    // Too low altitudes are not allowed by ArduCopter because of possible
+    // crash landings.
+    mav_waypoint.z = fmax(0.1, mav_waypoint.z);
 
     // Set params
     mav_waypoint.seq = 0;    // Unused
