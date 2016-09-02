@@ -120,8 +120,7 @@ local_pos global_to_local_ned(global_pos_int point, global_pos_int reference)
     // Subtract and convert from millimeters (int) to meters (double)
     local.z = (point.alt - reference.alt) * 1.0e-3f;
 
-    // Convert from ENU to NED
-    std::swap(local.x, local.y);
+    // Set Altitude-Down (NED convention)
     local.z = -local.z;
 
     return local;
@@ -137,8 +136,7 @@ global_pos_int local_ned_to_global(local_pos point, global_pos_int reference)
     // south from the equator.
     double radius_scaling_factor = cosf(math::deg2rad(reference.lat * 1.0e-7f));
 
-    // Convert from NED to ENU
-    std::swap(point.x, point.y);
+    // Set Altitude-UP (ENU convention)
     point.z = -point.z;
 
     // Scale and add
@@ -179,11 +177,6 @@ double get_waypoint_rel_angle(global_pos_int wp_pos, global_pos_int ref_pos,
 
     // Calculate relative angle
     double wp_angle = math::rad2deg(atan2(wp_rel.y, wp_rel.x));
-
-    // While yaw follow NED convention, wp_angle is calculated according to ENU
-    // conventions. We need to follow the same convention before subracting them
-    // up to calculate the relative angle.
-    wp_angle = -wp_angle + 90.0;
 
     double wp_rel_angle = rad2deg(ref_att.yaw) - wp_angle;
 
