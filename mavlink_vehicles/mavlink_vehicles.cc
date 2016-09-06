@@ -55,7 +55,8 @@ const double waypoint_acceptance_radius_m = 0.01;
 const double arrival_max_dist_m = 0.5;
 const double rotation_arrival_max_dif_deg = 10.0;
 const double autorotate_max_targ_angle = 20.0;
-const double is_stopped_max_speed_mps = 0.3;
+const double is_stopped_max_speed_mps = 0.2;
+const int is_stopped_low_speed_min_time_ms = 3000;
 }
 
 namespace request_intervals_ms
@@ -1154,8 +1155,9 @@ void mav_vehicle::update()
 
     // Check if a detour has been finished in order to continue the mission
     if (is_detour_active() &&
-        fabs(math::dist(detour_waypoint, get_global_position_int())) <=
-            defaults::arrival_max_dist_m) {
+        (fabs(math::dist(detour_waypoint, get_global_position_int())) <=
+             defaults::arrival_max_dist_m ||
+         is_stopped())) {
 
         // Get back to normal mode, finishing the detour
         this->mstatus = mission_status::NORMAL;
@@ -1170,10 +1172,7 @@ void mav_vehicle::update()
     }
 
     // Check if a brake has finished in order to continue the mission
-    if (is_brake_active() &&
-        fabs(speed.x) <= defaults::is_stopped_max_speed_mps &&
-        fabs(speed.y) <= defaults::is_stopped_max_speed_mps &&
-        fabs(speed.z) <= defaults::is_stopped_max_speed_mps) {
+    if (is_brake_active() && is_stopped()) {
 
         print_verbose("Brake finished\n");
         this->mstatus = mission_status::NORMAL;
@@ -1238,6 +1237,22 @@ void mav_vehicle::update()
             rotate(target_angle, true);
         }
     }
+
+    // Update stop status. The vehicle is considered to be stopped when its
+    // velocities are close to zero for a predetermined amount of time.
+    if (fabs(this->speed.x) <= defaults::is_stopped_max_speed_mps &&
+        fabs(this->speed.y) <= defaults::is_stopped_max_speed_mps &&
+        fabs(this->speed.z) <= defaults::is_stopped_max_speed_mps) {
+
+        // Update stop time counter
+        if (this->stop_time == std::chrono::system_clock::from_time_t(0)) {
+            this->stop_time = std::chrono::system_clock::now();
+        }
+
+    } else {
+        // The vehicle is moving. Reset stop time.
+        this->stop_time = std::chrono::system_clock::from_time_t(0);
+    }
 }
 
 bool mav_vehicle::is_remote_responding() const
@@ -1279,6 +1294,14 @@ void mav_vehicle::send_mission_count(int c)
                                      &mav_msg, &count);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
     send_data(mav_data_buffer, n);
+}
+
+bool mav_vehicle::is_stopped()
+{
+    using namespace std::chrono;
+    return (this->stop_time != system_clock::from_time_t(0)) &&
+           (duration_cast<milliseconds>(system_clock::now() - this->stop_time)
+                .count() > defaults::is_stopped_low_speed_min_time_ms);
 }
 }
 
