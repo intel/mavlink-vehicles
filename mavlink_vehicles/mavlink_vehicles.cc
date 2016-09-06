@@ -324,6 +324,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         // Check if someone else has taken control
         if (ack.target_system != mav.system_id) {
             print_verbose("Someone else has taken control\n");
+            mav.mstatus = mission_status::NORMAL;
             mav.is_our_control = false;
         }
 
@@ -987,6 +988,7 @@ void mav_vehicle::send_detour_waypoint(global_pos_int wp, bool autocontinue,
     // Store detour waypoint
     this->detour_waypoint = wp;
     this->detour_waypoint_autocontinue = autocontinue;
+    this->waypoint_autorotate = autorotate;
 
     // Set detour as active
     this->mstatus = mission_status::DETOURING;
@@ -1202,7 +1204,9 @@ void mav_vehicle::update()
             print_verbose("Autocontinuing\n");
             switch (this->autocontinue_action) {
             case mission_status::DETOURING:
-                send_detour_waypoint(this->detour_waypoint);
+                // TODO: Check these booleans
+                send_detour_waypoint(this->detour_waypoint, true,
+                                     this->waypoint_autorotate);
                 break;
             default:
                 set_mode(mode::AUTO, 0);
