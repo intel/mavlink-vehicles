@@ -185,6 +185,10 @@ class mav_vehicle
     bool autocontinue_after_rotation = false;
     mission_status autocontinue_action = mission_status::NORMAL;
 
+    std::chrono::time_point<std::chrono::system_clock> stop_time =
+        std::chrono::system_clock::from_time_t(0);
+    bool is_stopped();
+
     uint8_t system_id = 0;
     int sock = 0;
     struct sockaddr_storage remote_addr = {0};
