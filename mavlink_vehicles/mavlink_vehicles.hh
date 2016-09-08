@@ -175,7 +175,8 @@ class mav_vehicle
 
     global_pos_int detour_waypoint;
     bool detour_waypoint_autocontinue = true;
-    bool waypoint_autorotate = false;
+    bool mission_waypoint_autorotate = false;
+    bool detour_waypoint_autorotate = false;
 
     float rotation_goal = 0;
     float rotation_change = 0;
