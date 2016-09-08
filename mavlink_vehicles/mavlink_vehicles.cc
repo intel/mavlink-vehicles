@@ -53,8 +53,8 @@ const size_t send_buffer_len = 2041;
 const uint16_t remote_max_response_time_ms = 10000;
 const double waypoint_acceptance_radius_m = 0.01;
 const double arrival_max_dist_m = 0.5;
-const double rotation_arrival_max_dif_deg = 10.0;
-const double autorotate_max_targ_angle = 20.0;
+const double rotation_arrival_max_dif_deg = 5.0;
+const double autorotate_max_targ_angle = 10.0;
 const double is_stopped_max_speed_mps = 0.2;
 const int is_stopped_low_speed_min_time_ms = 3000;
 }
@@ -856,7 +856,7 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp, bool autorotate)
     this->mstatus = mission_status::NORMAL;
 
     this->sending_mission = true;
-    this->waypoint_autorotate = autorotate;
+    this->mission_waypoint_autorotate = autorotate;
 }
 
 void mav_vehicle::send_mission_waypoint(global_pos_int wp, uint16_t seq)
@@ -989,7 +989,7 @@ void mav_vehicle::send_detour_waypoint(global_pos_int wp, bool autocontinue,
     // Store detour waypoint
     this->detour_waypoint = wp;
     this->detour_waypoint_autocontinue = autocontinue;
-    this->waypoint_autorotate = autorotate;
+    this->detour_waypoint_autorotate = autorotate;
 
     // Set detour as active
     this->mstatus = mission_status::DETOURING;
@@ -1205,7 +1205,7 @@ void mav_vehicle::update()
             case mission_status::DETOURING:
                 // TODO: Check these booleans
                 send_detour_waypoint(this->detour_waypoint, true,
-                                     this->waypoint_autorotate);
+                                     this->detour_waypoint_autorotate);
                 break;
             default:
                 set_mode(mode::AUTO, 0);
@@ -1217,9 +1217,10 @@ void mav_vehicle::update()
     // Check if autorotation is active in order to request rotation if needed,
     // if not already rotating. Need also to make sure that a mission waypoint
     // is not currently being sent.
-    if (this->waypoint_autorotate &&
-        (this->mstatus == mission_status::NORMAL ||
-         this->mstatus == mission_status::DETOURING) &&
+    if (((this->mission_waypoint_autorotate &&
+          this->mstatus == mission_status::NORMAL) ||
+         (this->detour_waypoint_autorotate &&
+          this->mstatus == mission_status::DETOURING)) &&
         !this->sending_mission) {
 
         // Get the rotation angle to the detour or mission waypoint
