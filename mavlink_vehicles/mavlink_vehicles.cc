@@ -342,7 +342,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mavlink_mission_current_t mission_current;
         mavlink_msg_mission_current_decode(msg, &mission_current);
 
-        // If the current mission item id has changes our currently stored
+        // If the current mission item id has changed, our currently stored
         // mission item might be outdated.
         if (mav.mission_waypoint_id != mission_current.seq) {
             mav.mission_waypoint_id = mission_current.seq;
@@ -463,7 +463,7 @@ bool mav_vehicle::is_ready()
         return false;
     }
 
-    // Also check if mission waypoint has been received
+    // Also check if mission waypoint has been received.
     if (!get_mission_waypoint().is_initialized()) {
         return false;
     }
@@ -868,10 +868,6 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp, bool autorotate)
     this->mstatus = mission_status::NORMAL;
 
     this->sending_mission = true;
-    this->mission_waypoint = wp;
-    this->mission_waypoint.is_new = true;
-    this->mission_waypoint.timestamp = std::chrono::system_clock::now();
-
     this->mission_waypoint_autorotate = autorotate;
 }
 
@@ -1159,14 +1155,20 @@ void mav_vehicle::update()
                       request_intervals_ms::home_position);
     }
 
-    // Check if mission has changed
-    if (this->mission_waypoint_outdated) {
+    // Request initial mission item after successfuly receving home position
+    if (get_home_position_int().is_initialized() &&
+        !get_mission_waypoint().is_initialized()) {
         request_mission_item(this->mission_waypoint_id);
     }
 
     // Perform the next steps only if we are in control and if the vehicle is ready
     if (!this->is_ready() || !this->is_our_control) {
         return;
+    }
+
+    // Check if mission has changed
+    if (this->mission_waypoint_outdated) {
+        request_mission_item(this->mission_waypoint_id);
     }
 
     // Check if a detour has been finished in order to continue the mission
