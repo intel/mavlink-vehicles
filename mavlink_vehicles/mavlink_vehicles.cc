@@ -327,6 +327,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             print_verbose("Someone else has taken control\n");
             mav.mstatus = mission_status::NORMAL;
             mav.is_our_control = false;
+            return;
         }
 
         // A MISSION_ACK has been broadcast what means that the mission might
@@ -459,6 +460,11 @@ bool mav_vehicle::is_ready()
 
     // Check if home position has been received
     if (!get_home_position_int().is_initialized()) {
+        return false;
+    }
+
+    // Also check if mission waypoint has been received
+    if (!get_mission_waypoint().is_initialized()) {
         return false;
     }
 
@@ -862,6 +868,10 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp, bool autorotate)
     this->mstatus = mission_status::NORMAL;
 
     this->sending_mission = true;
+    this->mission_waypoint = wp;
+    this->mission_waypoint.is_new = true;
+    this->mission_waypoint.timestamp = std::chrono::system_clock::now();
+
     this->mission_waypoint_autorotate = autorotate;
 }
 
@@ -1154,8 +1164,8 @@ void mav_vehicle::update()
         request_mission_item(this->mission_waypoint_id);
     }
 
-    // Perform the next steps only if we are in control
-    if(!this->is_our_control) {
+    // Perform the next steps only if we are in control and if the vehicle is ready
+    if (!this->is_ready() || !this->is_our_control) {
         return;
     }
 
