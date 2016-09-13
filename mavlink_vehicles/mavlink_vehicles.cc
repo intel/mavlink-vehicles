@@ -293,11 +293,6 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mavlink_mission_ack_t ack;
         mavlink_msg_mission_ack_decode(msg, &ack);
 
-        // A MISSION_ACK has been broadcast what means that the mission might
-        // have changed, and so, our currently stored mission item might be
-        // outdated.
-        mav.curr_mission_item_outdated = true;
-
         // If the target of the ACK is our system and if we have been sending a
         // mission list, then it means that the list has been fully received by
         // the vehicle and that we can request a mission start if no other
@@ -307,6 +302,13 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             mav.sending_mission = false;
             print_verbose("Mission started\n");
         }
+
+        // A MISSION_ACK has been broadcast what means that the mission might
+        // have changed, and so, our currently stored mission item might be
+        // outdated.
+        mav.curr_mission_item_outdated = true;
+        print_verbose("Mission waypoint outdated\n");
+
         return;
     }
     case MAVLINK_MSG_ID_MISSION_CURRENT: {
