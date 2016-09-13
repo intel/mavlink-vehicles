@@ -54,7 +54,7 @@ const uint16_t remote_max_response_time_ms = 10000;
 const double waypoint_acceptance_radius_m = 0.01;
 const double arrival_max_dist_m = 1.6;
 const double rotation_arrival_max_dif_deg = 5.0;
-const double autorotate_max_targ_angle = 10.0;
+const double autorotate_max_targ_angle_deg = 10.0;
 const double is_stopped_max_speed_mps = 0.2;
 const int is_stopped_low_speed_min_time_ms = 500;
 }
@@ -177,14 +177,14 @@ double get_waypoint_rel_angle(global_pos_int wp_pos, global_pos_int ref_pos,
     local_pos wp_rel = global_to_local_ned(wp_pos, ref_pos);
 
     // Calculate relative angle
-    double wp_angle = math::rad2deg(atan2(wp_rel.y, wp_rel.x));
+    double wp_angle = atan2(wp_rel.y, wp_rel.x);
 
-    double wp_rel_angle = rad2deg(ref_att.yaw) - wp_angle;
+    double wp_rel_angle = ref_att.yaw - wp_angle;
 
-    if (wp_rel_angle > 180.0) {
-        wp_rel_angle = wp_rel_angle - 360.0;
-    } else if (wp_rel_angle < -180.0) {
-        wp_rel_angle = wp_rel_angle + 360.0;
+    if (wp_rel_angle > M_PI) {
+        wp_rel_angle = wp_rel_angle - 2 * M_PI;
+    } else if (wp_rel_angle < -M_PI) {
+        wp_rel_angle = wp_rel_angle + 2 * M_PI;
     }
 
     return wp_rel_angle;
@@ -761,7 +761,7 @@ void mav_vehicle::set_autorotate_during_detour(bool autorotate)
     this->detour_waypoint_autorotate = autorotate;
 }
 
-void mav_vehicle::rotate(double angle_deg, bool autocontinue)
+void mav_vehicle::rotate(double angle_rad, bool autocontinue)
 {
     // We have taken control
     this->is_our_control = true;
@@ -777,13 +777,11 @@ void mav_vehicle::rotate(double angle_deg, bool autocontinue)
     }
 
     // Make sure the value is in the interval [-360, +360]
-    angle_deg = std::fmod(angle_deg, 360);
-
-    // Set rotation goal
-    this->rotation_change = -math::deg2rad(angle_deg);
+    angle_rad = std::fmod(angle_rad, 2*M_PI);
+    double angle_deg = math::rad2deg(angle_rad);
 
     this->rotation_goal = std::fmod(
-        (this->get_attitude().yaw + this->rotation_change), (2 * M_PI));
+        (this->get_attitude().yaw - angle_rad), (2 * M_PI));
 
     if (this->rotation_goal > M_PI) {
         this->rotation_goal = this->rotation_goal - 2 * M_PI;
@@ -1254,7 +1252,8 @@ void mav_vehicle::update()
             math::get_waypoint_rel_angle(target_pos, global, att);
 
         // Rotate if not too close to target and if looking far away.
-        if (fabs(target_angle) > defaults::autorotate_max_targ_angle &&
+        if (fabs(target_angle) >
+                math::deg2rad(defaults::autorotate_max_targ_angle_deg) &&
             fabs(math::ground_dist(target_pos, get_global_position_int())) >
                 defaults::arrival_max_dist_m) {
             rotate(target_angle, true);

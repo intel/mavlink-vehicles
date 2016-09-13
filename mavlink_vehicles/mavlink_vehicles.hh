@@ -129,7 +129,7 @@ class mav_vehicle
 
     // Command the vehicle to immediately stop and rotate before moving to the
     // next detour or mission waypoint.
-    void rotate(double angle_deg, bool autocontinue = true);
+    void rotate(double angle_rad, bool autocontinue = true);
     void set_autorotate_during_mission(bool autorotate);
     void set_autorotate_during_detour(bool autorotate);
     bool is_rotation_active() const;
@@ -181,8 +181,6 @@ class mav_vehicle
     bool detour_waypoint_autorotate = false;
 
     float rotation_goal = 0;
-    float rotation_change = 0;
-
     bool is_our_control = false;
     bool autocontinue_after_brake = true;
     bool autocontinue_after_rotation = false;
