@@ -52,11 +52,11 @@ const float lookat_rot_speed_degps = 90.0;
 const size_t send_buffer_len = 2041;
 const uint16_t remote_max_response_time_ms = 10000;
 const double waypoint_acceptance_radius_m = 0.01;
-const double arrival_max_dist_m = 0.5;
+const double arrival_max_dist_m = 1.6;
 const double rotation_arrival_max_dif_deg = 5.0;
 const double autorotate_max_targ_angle = 10.0;
 const double is_stopped_max_speed_mps = 0.2;
-const int is_stopped_low_speed_min_time_ms = 3000;
+const int is_stopped_low_speed_min_time_ms = 500;
 }
 
 namespace request_intervals_ms
@@ -745,6 +745,12 @@ void mav_vehicle::takeoff()
                   defaults::takeoff_init_alt_m, request_intervals_ms::takeoff);
 }
 
+void mav_vehicle::set_autorotate(bool mission, bool detour)
+{
+    this->mission_waypoint_autorotate = mission;
+    this->detour_waypoint_autorotate = detour;
+}
+
 void mav_vehicle::rotate(double angle_deg, bool autocontinue)
 {
     // We have taken control
@@ -1156,7 +1162,7 @@ void mav_vehicle::update()
     // Check if a detour has been finished in order to continue the mission
     if (is_detour_active() &&
         (fabs(math::dist(detour_waypoint, get_global_position_int())) <=
-             defaults::arrival_max_dist_m ||
+             defaults::arrival_max_dist_m &&
          is_stopped())) {
 
         // Get back to normal mode, finishing the detour
