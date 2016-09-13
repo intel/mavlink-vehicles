@@ -271,9 +271,6 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mavlink_mission_request_t mission_request;
         mavlink_msg_mission_request_decode(msg, &mission_request);
 
-        print_verbose("MI Request received: %d\n",
-                      mission_request.target_system);
-
         // ArduCopter broadcasts MAVLINK_MSG_ID_MISSION_REQUESTS with
         // 'target_sytem_id' set to 255, therefore it's not possible to
         // determine whether the request is aimed to us or not. This might cause
@@ -308,6 +305,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         if (ack.target_system == mav.system_id && mav.is_sending_mission()) {
             mav.set_mode(mode::AUTO, 0);
             mav.sending_mission = false;
+            print_verbose("Mission started\n");
         }
         return;
     }
@@ -704,7 +702,7 @@ void mav_vehicle::request_mission_item(uint16_t item_id)
     // Update timestamp
     cmd_custom_timestamps[cmd] = std::chrono::system_clock::now();
 
-    print_verbose("Requesting Mission waypoint\n");
+    print_verbose("Mission waypoint requested\n");
 }
 
 void mav_vehicle::arm_throttle()
@@ -721,6 +719,7 @@ void mav_vehicle::takeoff()
 
 void mav_vehicle::rotate(double angle_deg)
 {
+    print_verbose("Rotation command received\n");
     cmd_custom cmd = cmd_custom::ROTATE;
 
     // Check if cmd_custom::ROTATE has been sent recently
@@ -760,7 +759,7 @@ void mav_vehicle::rotate(double angle_deg)
     // Set rotation as active
     this->mstatus = mission_status::ROTATING;
 
-    print_verbose("Sending rotation command\n");
+    print_verbose("Rotation started\n");
 }
 
 bool mav_vehicle::is_rotation_active() const
@@ -785,6 +784,8 @@ void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt)
 
 void mav_vehicle::send_mission_waypoint(global_pos_int wp)
 {
+    print_verbose("New mission received\n");
+
     // We need to toggle from AUTO to GUIDED in order to update the mission
     // waypoints
     set_mode(mode::GUIDED, 0);
@@ -804,8 +805,6 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp)
 
     // Set mission mode as normal
     this->mstatus = mission_status::NORMAL;
-
-    print_verbose("Mission started\n");
 
     this->sending_mission = true;
 }
@@ -1118,8 +1117,7 @@ void mav_vehicle::update()
         // Get back to AUTO mode to continue the mission
         set_mode(mode::AUTO, 0);
 
-        print_verbose("Rotation finished: yaw, goal: y%f, g%f, c%f\n",
-                      get_attitude().yaw, this->rotation_goal, this->rotation_change);
+        print_verbose("Rotation finished\n");
     }
 }
 
