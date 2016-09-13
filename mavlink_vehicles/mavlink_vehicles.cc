@@ -751,10 +751,14 @@ void mav_vehicle::takeoff()
                   defaults::takeoff_init_alt_m, request_intervals_ms::takeoff);
 }
 
-void mav_vehicle::set_autorotate(bool mission, bool detour)
+void mav_vehicle::set_autorotate_during_mission(bool autorotate)
 {
-    this->mission_waypoint_autorotate = mission;
-    this->detour_waypoint_autorotate = detour;
+    this->mission_waypoint_autorotate = autorotate;
+}
+
+void mav_vehicle::set_autorotate_during_detour(bool autorotate)
+{
+    this->detour_waypoint_autorotate = autorotate;
 }
 
 void mav_vehicle::rotate(double angle_deg, bool autocontinue)
