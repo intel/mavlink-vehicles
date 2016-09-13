@@ -321,6 +321,12 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             print_verbose("Mission started\n");
         }
 
+        // Check if someone else has taken control
+        if (ack.target_system != mav.system_id) {
+            print_verbose("Someone else has taken control\n");
+            mav.is_our_control = false;
+        }
+
         // A MISSION_ACK has been broadcast what means that the mission might
         // have changed, and so, our currently stored mission item might be
         // outdated.
@@ -739,6 +745,9 @@ void mav_vehicle::takeoff()
 
 void mav_vehicle::rotate(double angle_deg, bool autocontinue)
 {
+    // We have taken control
+    this->is_our_control = true;
+
     print_verbose("Rotation command received\n");
     cmd_custom cmd = cmd_custom::ROTATE;
 
@@ -819,6 +828,9 @@ void mav_vehicle::send_mission_waypoint(double lat, double lon, double alt,
 
 void mav_vehicle::send_mission_waypoint(global_pos_int wp, bool autorotate)
 {
+    // We have taken control
+    this->is_our_control = true;
+
     print_verbose("New mission received\n");
 
     // We need to toggle from AUTO to GUIDED in order to update the mission
@@ -890,6 +902,9 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp, uint16_t seq)
 
 void mav_vehicle::brake(bool autocontinue)
 {
+    // We have taken control
+    this->is_our_control = true;
+
     // Change mode to brake
     set_mode(mode::BRAKE, 0);
 
@@ -925,6 +940,9 @@ void mav_vehicle::send_detour_waypoint(double lat, double lon, double alt,
 void mav_vehicle::send_detour_waypoint(global_pos_int wp, bool autocontinue,
                                        bool autorotate)
 {
+    // We have taken control
+    this->is_our_control = true;
+
     mavlink_mission_item_t mav_waypoint;
 
     // Request change to guided mode
@@ -1127,6 +1145,11 @@ void mav_vehicle::update()
         request_mission_item(this->mission_waypoint_id);
     }
 
+    // Perform the next steps only if we are in control
+    if(!this->is_our_control) {
+        return;
+    }
+
     // Check if a detour has been finished in order to continue the mission
     if (is_detour_active() &&
         fabs(math::dist(detour_waypoint, get_global_position_int())) <=
@@ -1139,6 +1162,7 @@ void mav_vehicle::update()
 
         // Get back to AUTO mode to continue the mission
         if (this->detour_waypoint_autocontinue) {
+            this->is_our_control = true;
             set_mode(mode::AUTO, 0);
         }
     }

@@ -180,6 +180,7 @@ class mav_vehicle
     float rotation_goal = 0;
     float rotation_change = 0;
 
+    bool is_our_control = false;
     bool autocontinue_after_brake = true;
     bool autocontinue_after_rotation = false;
     mission_status autocontinue_action = mission_status::NORMAL;
