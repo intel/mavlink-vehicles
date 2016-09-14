@@ -327,7 +327,6 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             print_verbose("Someone else has taken control\n");
             mav.mstatus = mission_status::NORMAL;
             mav.is_our_control = false;
-            return;
         }
 
         // A MISSION_ACK has been broadcast what means that the mission might
@@ -1161,16 +1160,17 @@ void mav_vehicle::update()
     if (get_home_position_int().is_initialized() &&
         !get_mission_waypoint().is_initialized()) {
         request_mission_item(this->mission_waypoint_id);
-    }
-
-    // Perform the next steps only if we are in control and if the vehicle is ready
-    if (!this->is_ready() || !this->is_our_control) {
         return;
     }
 
     // Check if mission has changed
     if (this->mission_waypoint_outdated) {
         request_mission_item(this->mission_waypoint_id);
+    }
+
+    // Perform the next steps only if we are in control and if the vehicle is ready
+    if (!this->is_ready() || !this->is_our_control) {
+        return;
     }
 
     // Check if a detour has been finished in order to continue the mission
