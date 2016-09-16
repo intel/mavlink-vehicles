@@ -61,7 +61,7 @@ const int is_stopped_low_speed_min_time_ms = 500;
 
 namespace request_intervals_ms
 {
-const uint16_t request_mission_item = 3000;
+const uint16_t request_mission_item = 300;
 const uint16_t home_position = 3000;
 const uint16_t arm_disarm = 1000;
 const uint16_t heartbeat = 1000;
@@ -1156,15 +1156,9 @@ void mav_vehicle::update()
                       request_intervals_ms::home_position);
     }
 
-    // Request initial mission item after successfuly receving home position
-    if (get_home_position_int().is_initialized() &&
-        !get_mission_waypoint().is_initialized()) {
-        request_mission_item(this->mission_waypoint_id);
-        return;
-    }
-
     // Check if mission has changed
-    if (this->mission_waypoint_outdated) {
+    if (get_home_position_int().is_initialized() &&
+        this->mission_waypoint_outdated) {
         request_mission_item(this->mission_waypoint_id);
     }
 
@@ -1213,8 +1207,9 @@ void mav_vehicle::update()
 
     // Check if a rotation has been finished in order to continue the mission
     if (is_rotation_active() &&
-        (fabs(get_attitude().yaw - this->rotation_goal) <=
-         math::deg2rad(defaults::rotation_arrival_max_dif_deg))) {
+        (this->mission_waypoint_outdated ||
+         (fabs(get_attitude().yaw - this->rotation_goal) <=
+          math::deg2rad(defaults::rotation_arrival_max_dif_deg)))) {
 
         print_verbose("Rotation finished\n");
         this->mstatus = mission_status::NORMAL;
@@ -1236,12 +1231,13 @@ void mav_vehicle::update()
 
     // Check if autorotation is active in order to request rotation if needed,
     // if not already rotating. Need also to make sure that a mission waypoint
-    // is not currently being sent.
+    // is not currently being sent and that the current mission waypoint is not
+    // outdated.
     if (((this->mission_waypoint_autorotate &&
           this->mstatus == mission_status::NORMAL) ||
          (this->detour_waypoint_autorotate &&
           this->mstatus == mission_status::DETOURING)) &&
-        !this->sending_mission) {
+        !this->sending_mission && !this->mission_waypoint_outdated) {
 
         // Get the rotation angle to the detour or mission waypoint
         global_pos_int target_pos = this->mission_waypoint;
