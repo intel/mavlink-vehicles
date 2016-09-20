@@ -93,7 +93,6 @@ void connection_test::run()
     // Initialize mavlink_vehicles update thread
     this->send_recv_thread_run = true;
     this->send_recv_thread = std::thread(&connection_test::update, this);
-    this->send_recv_thread.detach();
 
     // Check if mav_vehicle has been initialized
     std::cout << "[connection test] "
@@ -260,7 +259,6 @@ bool mission_test::run()
     // Initialize mavlink_vehicles update thread
     this->send_recv_thread_run = true;
     this->send_recv_thread = std::thread(&mission_test::update, this);
-    this->send_recv_thread.detach();
 
     // Check if mav_vehicle has been initialized
     std::cout << "[connection test] "
