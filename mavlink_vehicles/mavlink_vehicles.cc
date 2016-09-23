@@ -271,8 +271,11 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
                            : arm_status::NOT_ARMED;
 
         // Decode status flag
-        mav.stat = (hb.system_status == MAV_STATE_ACTIVE) ? status::ACTIVE
-                                                          : status::STANDBY;
+        mav.stat = (hb.system_status == MAV_STATE_ACTIVE ||
+                    hb.system_status == MAV_STATE_CRITICAL ||
+                    hb.system_status == MAV_STATE_EMERGENCY)
+                       ? status::ACTIVE
+                       : status::STANDBY;
         return;
     }
     case MAVLINK_MSG_ID_GLOBAL_POSITION_INT: {
