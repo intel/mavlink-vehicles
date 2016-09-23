@@ -154,6 +154,9 @@ class mav_vehicle
     void brake(bool autocontinue);
     bool is_brake_active() const;
 
+    // Be responsible for the autorotation of the vehicle.
+    void take_control(bool take_control);
+
   private:
     status stat;
     arm_status arm_stat;
