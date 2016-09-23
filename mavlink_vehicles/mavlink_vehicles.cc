@@ -547,6 +547,11 @@ gps_status mav_vehicle::get_gps_status() const
     return gps;
 }
 
+void mav_vehicle::take_control(bool take_control)
+{
+    this->is_our_control = take_control;
+}
+
 void mav_vehicle::send_heartbeat()
 {
     using namespace std::chrono;
