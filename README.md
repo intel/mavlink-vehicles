@@ -14,9 +14,9 @@ between an air vehicle and a ground station.
 once with:
 
     ```
-    git submodule init
-    git submodule update
+    git submodule update --init --recursive
     ```
+
 2. Create a build folder, make and install using CMAKE as follows:
 
     ```
@@ -31,22 +31,21 @@ once with:
 1. Open a second terminal and run Ardupilot:
 
     ```
-    ${ARDUPILOTDIR}/build/sitl/bin/arducopter-quad --model x
+    cd ${ARDUPILOTDIR}/build/sitl/bin
+    ./arducopter-quad --model x
     ```
 
 2. In a third terminal, run Mavproxy:
 
     ```
-    mavproxy.py --master tcp:127.0.0.1:5760 --out udp:127.0.0.1:14556 --streamrate -1
+    mavproxy.py --master tcp:127.0.0.1:5760 --out udp:127.0.0.1:14557 --streamrate -1
     ```
 
-3. Then simply open the following executable to run a simple test. This test
-connects to an active vehicle and displays its current variables every 3
-seconds.
+3. Then simply open the following executable to run a simple test.
 
     ```
-    build/tests/test
+    build/tests/tests
     ```
 
     This test connects to an active vehicle and displays its current state
-    variables every 3 seconds.
+    variables every once in a while.
