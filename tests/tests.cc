@@ -29,14 +29,14 @@
 
 int main()
 {
-    // tests::connection_test st;
-    // st.run();
+    tests::connection_test st;
+    st.run();
 
     // tests::conversion_test ct;
     // ct.run();
 
-    tests::mission_test mt;
-    mt.run();
+    // tests::mission_test mt;
+    // mt.run();
 }
 
 namespace tests
