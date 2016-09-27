@@ -26,55 +26,45 @@
 namespace tests
 {
 
-class connection_test
+class common_test
 {
-
   public:
-    connection_test();
-    ~connection_test();
+    common_test();
+    ~common_test();
+    virtual bool run(int time_s = 10) = 0;
 
-    void run();
-
-  private:
+  protected:
     int sock = 0;
     socklen_t fromlen = {0};
     struct sockaddr_in local_addr = {0};
-    std::shared_ptr<mavlink_vehicles::mav_vehicle> mav;
-    std::thread send_recv_thread;
-    bool send_recv_thread_run = false;
 
-    void show_mav_state();
+    std::shared_ptr<mavlink_vehicles::mav_vehicle> mav;
+
+    bool mav_update_thread_run = false;
+    std::thread mav_update_thread;
     void update();
+    bool connect();
 };
 
-class mission_test
+class connection_test : public common_test
 {
-
   public:
-    mission_test();
-    ~mission_test();
-
-    bool run();
+    bool run(int time_s) override;
 
   private:
-    int sock = 0;
-    socklen_t fromlen = {0};
-    struct sockaddr_in local_addr = {0};
-    std::shared_ptr<mavlink_vehicles::mav_vehicle> mav;
-    std::thread send_recv_thread;
-    bool send_recv_thread_run = false;
-
-    void show_mav_state();
-    void update();
+    bool show_mav_state();
 };
 
-class conversion_test
+class mission_test : public common_test
 {
   public:
-    conversion_test();
-    ~conversion_test();
+    bool run(int time_s) override;
+};
 
-    void run();
+class conversion_test : public common_test
+{
+  public:
+    bool run(int time_s = 0) override;
 };
 }
 
