@@ -44,11 +44,11 @@ $PKG_CONFIG_PATH should be set with the following command:
     mavproxy.py --master tcp:127.0.0.1:5760 --out udp:127.0.0.1:14557 --streamrate -1
     ```
 
-3. Then simply open the following executable to run a simple test.
+3. Run tests:
 
     ```
     build/tests/tests
     ```
 
-    This test connects to an active vehicle and displays its current state
-    variables every once in a while.
+    A series of tests will be executed and their results (OK/FAIL) will be
+    displayed on the screen.
