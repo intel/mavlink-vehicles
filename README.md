@@ -4,20 +4,23 @@ A Mavlink wrapper dedicated to the most common messages that are exchanged
 between an air vehicle and a ground station.
 
 ## Requirements ##
-    * Python 2.7+ (to generate mavlink headers)
-    * MavProxy (https://github.com/Dronecode/MAVProxy)
+    * Mavlink (https:https://github.com/mavlink/mavlink)
+    * MavProxy (https://github.com/ArduPilot/MAVProxy)
     * Ardupilot (https://github.com/ArduPilot/ardupilot)
 
 ## Build and Install ##
 
-1. Make sure you have initialized and updated the Mavlink submodule at least
-once with:
+1. Make sure you have all dependencies properly installed in your system.
+
+2. Check if $PKG_CONFIG_PATH points to the location of the mavlink pkg-config
+configuration file. If you have installed Mavlink using its cmake defaults,
+$PKG_CONFIG_PATH should be set with the following command:
 
     ```
-    git submodule update --init --recursive
+    export PKG_CONFIG_PATH=${PKG_CONFIG_PATH}:/usr/local/lib/pkgconfig
     ```
 
-2. Create a build folder, make and install using CMAKE as follows:
+2. Create a build folder and compile using CMAKE as follows:
 
     ```
     mkdir build
