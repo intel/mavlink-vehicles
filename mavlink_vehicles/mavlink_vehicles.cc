@@ -61,7 +61,8 @@ const int is_stopped_low_speed_min_time_ms = 500;
 
 namespace request_intervals_ms
 {
-const uint16_t request_mission_item = 300;
+const uint16_t request_mission_list = 300;
+const uint16_t request_mission_item = 0;
 const uint16_t home_position = 3000;
 const uint16_t arm_disarm = 1000;
 const uint16_t heartbeat = 1000;
@@ -302,12 +303,12 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         // If we are not sending a mission or if the mission item requested is
         // not within our mission size, simply ignore it.
         if (!mav.is_sending_mission() ||
-            mission_request.seq >= mav.mission_items_list.size()) {
+            mission_request.seq >= mav.mission_to_send.size()) {
             return;
         }
 
         // Send requested mission waypoint
-        global_pos_int item = mav.mission_items_list[mission_request.seq];
+        global_pos_int item = mav.mission_to_send[mission_request.seq];
         mav.send_mission_waypoint(item, mission_request.seq);
         return;
     }
@@ -362,6 +363,11 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             return;
         }
 
+        // Ignore if we are not receiving a mission list
+        if(!mav.is_receiving_mission()) {
+            return;
+        }
+
         // Evaluate mission frame and store mission item position with global
         // coordinates
         switch (mission_item.frame) {
@@ -380,7 +386,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         default: {
             // Other types of frames are not supported
             print_verbose("Received mission item with "
-                          "unsupported frame num: %d",
+                          "unsupported frame num: %d\n",
                           (int)mission_item.frame);
             return;
         }
@@ -390,12 +396,32 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         global_mission_item.timestamp = std::chrono::system_clock::now();
         global_mission_item.is_new = true;
 
-        // Retrieve current mission item data converting from
-        // global-relative-alt to global
+        // Mission item received
+        print_verbose("Mission item received: %d\n", mission_item.seq);
+
+        // Store mission item on list
+        if (mav.received_mission.size() == mission_item.seq) {
+            mav.received_mission.push_back(global_mission_item);
+        }
+
+        // Request next mission item
+        if (mav.received_mission.size() < mav.mission_size) {
+            mav.request_mission_item(mav.received_mission.size());
+        }
+
+        // Store current mission item if this is the one being received
         if (mav.mission_waypoint_id == mission_item.seq) {
             mav.mission_waypoint = global_mission_item;
             mav.mission_waypoint_outdated = false;
-            print_verbose("Mission waypoint updated\n");
+            print_verbose("Mission waypoint updated %d\n", mission_item.seq);
+        }
+
+        // Print message saying that the full mission has been updated and send
+        // mission ACK.
+        if (mav.received_mission.size() == mav.mission_size) {
+            mav.receiving_mission = false;
+            mav.send_mission_ack(MAV_MISSION_ACCEPTED);
+            print_verbose("Mission list updated\n");
         }
         return;
     }
@@ -409,6 +435,30 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             command_ack.result == MAV_RESULT_ACCEPTED) {
             return;
         }
+    }
+    case MAVLINK_MSG_ID_MISSION_COUNT: {
+        mavlink_mission_count_t mission_count;
+        mavlink_msg_mission_count_decode(msg, &mission_count);
+
+        // Mission count has been received what means that someone has asked
+        // for the mission list. First we check if it refers to us.
+        if (mission_count.target_system != mav.system_id) {
+            return;
+        }
+
+        // Ignore if we are not requesting a mission
+        if (!mav.is_receiving_mission()) {
+            return;
+        }
+
+        print_verbose("Mission count received: %d\n", mission_count.count);
+
+        // Request the mission waypoints one by one.
+        mav.received_mission.reserve(mission_count.count);
+        mav.received_mission.clear();
+        mav.mission_size = mission_count.count;
+        mav.request_mission_item(0);
+        return;
     }
     }
 }
@@ -545,6 +595,11 @@ bool mav_vehicle::is_sending_mission() const
     return this->sending_mission;
 }
 
+bool mav_vehicle::is_receiving_mission() const
+{
+    return this->receiving_mission;
+}
+
 gps_status mav_vehicle::get_gps_status() const
 {
     return gps;
@@ -560,7 +615,7 @@ void mav_vehicle::send_heartbeat()
     using namespace std::chrono;
     cmd_custom cmd = cmd_custom::HEARTBEAT;
 
-    // Check if cmd_custom::HEARTBEAT has been sent recently
+    // Check if this command has been sent recently
     if (cmd_custom_timestamps.count(cmd) &&
         !is_timedout(cmd_custom_timestamps[cmd],
                      request_intervals_ms::heartbeat)) {
@@ -618,7 +673,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
         return;
     }
 
-    // Check if command has been sent recently
+    // Check if this command has been sent recently
     if (cmd_custom_timestamps.count(cmd) &&
         !is_timedout(cmd_custom_timestamps[cmd], timeout)) {
         return;
@@ -712,11 +767,40 @@ void mav_vehicle::set_mode(mode m, int timeout)
     }
 }
 
+void mav_vehicle::request_mission_list()
+{
+    cmd_custom cmd = cmd_custom::REQUEST_MISSION_LIST;
+
+    // Check if this command has been sent recently
+    if (cmd_custom_timestamps.count(cmd) &&
+        !is_timedout(cmd_custom_timestamps[cmd],
+                     request_intervals_ms::request_mission_list)) {
+        return;
+    }
+
+    // Encode and send
+    mavlink_message_t mav_msg;
+    uint8_t mav_data_buffer[defaults::send_buffer_len];
+    mavlink_msg_mission_request_list_pack(
+        this->system_id, defaults::component_id, &mav_msg,
+        defaults::target_component_id, defaults::target_system_id);
+    int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
+    if (send_data(mav_data_buffer, n) == -1) {
+        std::perror("Error requesting mission list");
+    }
+
+    // Update timestamp
+    cmd_custom_timestamps[cmd] = std::chrono::system_clock::now();
+
+    this->receiving_mission = true;
+    print_verbose("Mission list requested\n");
+}
+
 void mav_vehicle::request_mission_item(uint16_t item_id)
 {
     cmd_custom cmd = cmd_custom::REQUEST_MISSION_ITEM;
 
-    // Check if cmd_custom::SET_MODE has been sent recently
+    // Check if this command has been sent recently
     if (cmd_custom_timestamps.count(cmd) &&
         !is_timedout(cmd_custom_timestamps[cmd],
                      request_intervals_ms::request_mission_item)) {
@@ -743,7 +827,7 @@ void mav_vehicle::request_mission_item(uint16_t item_id)
     // Update timestamp
     cmd_custom_timestamps[cmd] = std::chrono::system_clock::now();
 
-    print_verbose("Mission waypoint requested\n");
+    print_verbose("Mission waypoint requested %d\n", item_id);
 }
 
 void mav_vehicle::arm_throttle()
@@ -865,9 +949,9 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp, bool autorotate)
     // number does not overwrite the home position. Ardupilot simply ignores
     // it. For that reason, the first waypoint (seq=0) must be a mock waypoint
     // that will never be used and our waypoints must start with seq=1
-    this->mission_items_list.resize(0);
-    this->mission_items_list.push_back(wp); // Mock waypoint. Will be ignored.
-    this->mission_items_list.push_back(wp); // Real target waypoint.
+    this->mission_to_send.resize(0);
+    this->mission_to_send.push_back(wp); // Mock waypoint. Will be ignored.
+    this->mission_to_send.push_back(wp); // Real target waypoint.
 
     // Send the mission_count command to Ardupilot so that it prepares to
     // request the mission items one by one.
@@ -1034,7 +1118,7 @@ void mav_vehicle::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
 {
     using namespace std::chrono;
 
-    // Check if the command long stored in cmd has been sent recently
+    // Check if this command has been sent recently
     if (cmd_long_timestamps.count(cmd) &&
         !is_timedout(cmd_long_timestamps[cmd], timeout)) {
         return;
@@ -1167,7 +1251,7 @@ void mav_vehicle::update()
     // Check if mission has changed
     if (get_home_position_int().is_initialized() &&
         this->mission_waypoint_outdated) {
-        request_mission_item(this->mission_waypoint_id);
+        request_mission_list();
     }
 
     // Perform the next steps only if we are in control and if the vehicle is ready

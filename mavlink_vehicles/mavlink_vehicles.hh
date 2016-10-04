@@ -74,6 +74,7 @@ enum class cmd_custom {
     SET_MODE_AUTO,
     SET_MODE_BRAKE,
     REQUEST_MISSION_ITEM,
+    REQUEST_MISSION_LIST,
     ROTATE
 };
 
@@ -125,7 +126,7 @@ class mav_vehicle
     void arm_throttle();
     void send_heartbeat();
     void set_mode(mode m);
-    void request_mission_item(uint16_t item_id);
+    void request_mission_list();
 
     // Command the vehicle to immediately stop and rotate before moving to the
     // next detour or mission waypoint.
@@ -148,6 +149,7 @@ class mav_vehicle
                                bool autorotate = false);
     void send_mission_waypoint(global_pos_int global, bool autorotate = false);
     bool is_sending_mission() const;
+    bool is_receiving_mission() const;
 
     // Command the vehicle to brake immediately. The vehicle automatically
     // continues the mission after achieving v=0 if autocontinue is true.
@@ -173,8 +175,12 @@ class mav_vehicle
     uint16_t mission_waypoint_id = 0;
     bool mission_waypoint_outdated = true;
 
-    std::vector<global_pos_int> mission_items_list;
     bool sending_mission = false;
+    std::vector<global_pos_int> mission_to_send;
+
+    bool receiving_mission = false;
+    unsigned int mission_size = 0;
+    std::vector<global_pos_int> received_mission;
 
     mission_status mstatus = mission_status::NORMAL;
 
@@ -215,6 +221,7 @@ class mav_vehicle
     void send_mission_ack(uint8_t type);
     void set_mode(mode m, int timeout);
     void send_mission_count(int n);
+    void request_mission_item(uint16_t item_id);
 
     friend class msghandler;
 };
