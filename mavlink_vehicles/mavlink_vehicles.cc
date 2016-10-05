@@ -75,7 +75,7 @@ bool is_timedout(std::chrono::time_point<std::chrono::system_clock> timestamp,
 {
     using namespace std::chrono;
     return duration_cast<milliseconds>(system_clock::now() - timestamp)
-               .count() > timeout_ms;
+               .count() >= timeout_ms;
 }
 
 bool is_same_socket(sockaddr_storage &r1, sockaddr_storage &r2)
