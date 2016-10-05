@@ -68,6 +68,8 @@ enum class arm_status { ARMED, NOT_ARMED };
 
 enum class gps_status { NO_FIX, FIX_2D_PLUS };
 
+enum class firmware_type { APM, PX4 };
+
 enum class cmd_custom {
     HEARTBEAT,
     SET_MODE_GUIDED,
@@ -75,7 +77,8 @@ enum class cmd_custom {
     SET_MODE_BRAKE,
     REQUEST_MISSION_ITEM,
     REQUEST_MISSION_LIST,
-    ROTATE
+    ROTATE,
+    DETOUR
 };
 
 enum class mission_status {
@@ -200,6 +203,7 @@ class mav_vehicle
         std::chrono::system_clock::from_time_t(0);
     bool is_stopped();
 
+    firmware_type flight_stack_type = firmware_type::APM;
     uint8_t system_id = 0;
     int sock = 0;
     struct sockaddr_storage remote_addr = {0};
@@ -223,6 +227,10 @@ class mav_vehicle
     void set_mode(mode m, int timeout);
     void send_mission_count(int n);
     void request_mission_item(uint16_t item_id);
+    void set_position_target(global_pos_int wp, int timeout);
+    void set_position_target(global_pos_int wp);
+    void set_yaw_target(float yaw, int timeout);
+    void set_yaw_target(float yaw);
 
     friend class msghandler;
 };
