@@ -740,8 +740,12 @@ void mav_vehicle::set_mode(mode m, int timeout)
         cmd = cmd_custom::SET_MODE_BRAKE;
         break;
     }
+    case mode::TAKEOFF: {
+        cmd = cmd_custom::SET_MODE_TAKEOFF;
+        break;
+    }
     default:
-        print_verbose("Trying to set unsupported mode");
+        print_verbose("Trying to set unsupported mode\n");
         return;
     }
 
@@ -837,6 +841,45 @@ void mav_vehicle::set_mode(mode m, int timeout)
         }
 
         print_verbose("Mode change to AUTO\n");
+        break;
+    }
+    case mode::TAKEOFF: {
+
+        // Generate set mode mavlink message
+        // Arducopter does not use the standard MAV_MODE_FLAG. It uses
+        // a custom mode instead. AUTO mode is defined as 3.
+        mavlink_message_t mav_msg;
+        mavlink_set_mode_t mav_cmd_set_mode;
+        mav_cmd_set_mode.base_mode = 157;
+        mav_cmd_set_mode.target_system = defaults::target_system_id;
+
+        union px4_custom_mode px4_mode;
+        px4_mode.data = 0;
+        px4_mode.main_mode = PX4_CUSTOM_MAIN_MODE_AUTO;
+        px4_mode.sub_mode = PX4_CUSTOM_SUB_MODE_AUTO_TAKEOFF;
+
+        mav_cmd_set_mode.custom_mode = px4_mode.data;
+
+        print_verbose("Set mode: %d, %d, %d, %d, %d\n", this->system_id,
+                      defaults::component_id, defaults::target_system_id,
+                      mav_cmd_set_mode.base_mode, mav_cmd_set_mode.custom_mode);
+
+        // Encode and send
+        uint8_t mav_data_buffer[defaults::send_buffer_len];
+        mavlink_msg_set_mode_encode(this->system_id, defaults::component_id,
+                                    &mav_msg, &mav_cmd_set_mode);
+        int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
+        send_data(mav_data_buffer, n);
+
+        // Update timestamp
+        cmd_custom_timestamps[cmd] = system_clock::now();
+
+        if (send_data(mav_data_buffer, n) == -1) {
+            print_verbose("Error changing mode to TAKEOFF\n");
+            break;
+        }
+
+        print_verbose("Mode change to TAKEOFF\n");
         break;
     }
     case mode::BRAKE: {
@@ -956,16 +999,16 @@ void mav_vehicle::request_mission_item(uint16_t item_id)
     print_verbose("Mission waypoint requested %d\n", item_id);
 }
 
-void mav_vehicle::arm_throttle()
+void mav_vehicle::arm_throttle(bool arm_disarm)
 {
-    send_cmd_long(MAV_CMD_COMPONENT_ARM_DISARM, 1, 0, 0, 0, 0, 0, 0,
+    float arm = arm_disarm ? 1.0 : 0.0;
+    send_cmd_long(MAV_CMD_COMPONENT_ARM_DISARM, arm, 0, 0, 0, 0, 0, 0,
                   request_intervals_ms::arm_disarm);
 }
 
 void mav_vehicle::takeoff()
 {
-    send_cmd_long(MAV_CMD_NAV_TAKEOFF, 0, 0, 0, 0, 0, 0,
-                  defaults::takeoff_init_alt_m, request_intervals_ms::takeoff);
+    this->set_mode(mode::TAKEOFF);
 }
 
 void mav_vehicle::set_autorotate_during_mission(bool autorotate)
@@ -1444,7 +1487,7 @@ void mav_vehicle::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
 
     switch (cmd) {
     case MAV_CMD_COMPONENT_ARM_DISARM:
-        print_verbose("Arm throttle command sent\n");
+        print_verbose("Arm throttle command sent %f\n", p1);
         break;
     case MAV_CMD_NAV_TAKEOFF:
         print_verbose("Takeoff command sent\n");

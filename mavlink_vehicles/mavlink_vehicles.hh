@@ -62,7 +62,7 @@ struct local_pos : state_variable {
 
 enum class status { STANDBY, ACTIVE };
 
-enum class mode { GUIDED, AUTO, BRAKE, OTHER };
+enum class mode { GUIDED, AUTO, BRAKE, OTHER, TAKEOFF };
 
 enum class arm_status { ARMED, NOT_ARMED };
 
@@ -75,6 +75,7 @@ enum class cmd_custom {
     SET_MODE_GUIDED,
     SET_MODE_AUTO,
     SET_MODE_BRAKE,
+    SET_MODE_TAKEOFF,
     REQUEST_MISSION_ITEM,
     REQUEST_MISSION_LIST,
     ROTATE,
@@ -127,7 +128,7 @@ class mav_vehicle
     global_pos_int get_detour_waypoint();
 
     void takeoff();
-    void arm_throttle();
+    void arm_throttle(bool arm_disarm = true);
     void send_heartbeat();
     void set_mode(mode m);
     void request_mission_list();
@@ -203,7 +204,7 @@ class mav_vehicle
         std::chrono::system_clock::from_time_t(0);
     bool is_stopped();
 
-    firmware_type flight_stack_type = firmware_type::APM;
+    firmware_type flight_stack_type = firmware_type::PX4;
     uint8_t system_id = 0;
     int sock = 0;
     struct sockaddr_storage remote_addr = {0};
