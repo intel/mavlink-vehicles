@@ -714,6 +714,10 @@ void mav_vehicle::set_mode(mode m, int timeout)
         cmd = cmd_custom::SET_MODE_BRAKE;
         break;
     }
+    case mode::TAKEOFF: {
+        cmd = cmd_custom::SET_MODE_TAKEOFF;
+        break;
+    }
     default:
         print_verbose("Trying to set unsupported mode\n");
         return;
@@ -813,6 +817,52 @@ void mav_vehicle::set_mode(mode m, int timeout)
         }
 
         print_verbose("Mode change to AUTO\n");
+        break;
+    }
+    case mode::TAKEOFF: {
+
+        // This mode is available on PX4 only
+        if (this->flight_stack_type != firmware_type::PX4) {
+            print_verbose(
+                "Error: mode::TAKEOFF is available for PX4 only. "
+                "Call to set_mode(mode::TAKEOFF) has been ignored.\n");
+            break;
+        }
+
+        // Generate mavlink message
+        mavlink_message_t mav_msg;
+        mavlink_set_mode_t mav_cmd_set_mode;
+        mav_cmd_set_mode.base_mode =
+            MAV_MODE_FLAG_CUSTOM_MODE_ENABLED | MAV_MODE_FLAG_SAFETY_ARMED;
+        mav_cmd_set_mode.target_system = defaults::target_system_id;
+
+        union px4_custom_mode px4_mode;
+        px4_mode.data = 0;
+        px4_mode.main_mode = PX4_CUSTOM_MAIN_MODE_AUTO;
+        px4_mode.sub_mode = PX4_CUSTOM_SUB_MODE_AUTO_TAKEOFF;
+
+        mav_cmd_set_mode.custom_mode = px4_mode.data;
+
+        print_verbose("Set mode: %d, %d, %d, %d, %d\n", this->system_id,
+                      defaults::component_id, defaults::target_system_id,
+                      mav_cmd_set_mode.base_mode, mav_cmd_set_mode.custom_mode);
+
+        // Encode and send
+        uint8_t mav_data_buffer[defaults::send_buffer_len];
+        mavlink_msg_set_mode_encode(this->system_id, defaults::component_id,
+                                    &mav_msg, &mav_cmd_set_mode);
+        int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
+        send_data(mav_data_buffer, n);
+
+        // Update timestamp
+        cmd_custom_timestamps[cmd] = system_clock::now();
+
+        if (send_data(mav_data_buffer, n) == -1) {
+            print_verbose("Error changing mode to TAKEOFF\n");
+            break;
+        }
+
+        print_verbose("Mode change to TAKEOFF\n");
         break;
     }
     case mode::BRAKE: {
@@ -928,7 +978,7 @@ void mav_vehicle::request_mission_item(uint16_t item_id)
     print_verbose("Mission waypoint requested %d\n", item_id);
 }
 
-void mav_vehicle::arm_throttle()
+void mav_vehicle::arm_throttle(bool arm_disarm)
 {
     send_cmd_long(MAV_CMD_COMPONENT_ARM_DISARM, float(arm_disarm), 0, 0, 0, 0,
                   0, 0, request_intervals_ms::arm_disarm);
@@ -936,8 +986,28 @@ void mav_vehicle::arm_throttle()
 
 void mav_vehicle::takeoff()
 {
-    send_cmd_long(MAV_CMD_NAV_TAKEOFF, 0, 0, 0, 0, 0, 0,
-                  defaults::takeoff_init_alt_m, request_intervals_ms::takeoff);
+    switch (this->flight_stack_type) {
+    case firmware_type::PX4:
+        if (this->get_status() != status::ACTIVE) {
+            this->set_mode(mode::TAKEOFF);
+        }
+        break;
+    case firmware_type::APM:
+        if (this->get_mode() != mode::GUIDED) {
+            this->set_mode(mode::GUIDED);
+        }
+        if (this->get_arm_status() != arm_status::ARMED) {
+            this->arm_throttle();
+        }
+        if (this->get_status() != status::ACTIVE) {
+            send_cmd_long(MAV_CMD_NAV_TAKEOFF, 0, 0, 0, 0, 0, 0,
+                          defaults::takeoff_init_alt_m,
+                          request_intervals_ms::takeoff);
+        }
+        break;
+    default:
+        break;
+    }
 }
 
 void mav_vehicle::set_autorotate_during_mission(bool autorotate)
