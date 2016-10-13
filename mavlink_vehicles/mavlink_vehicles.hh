@@ -104,6 +104,7 @@ class mav_vehicle
 {
   public:
     mav_vehicle(int socket_fd);
+    mav_vehicle(int socket_fd, uint8_t sysid);
     ~mav_vehicle();
 
     void update();
@@ -207,6 +208,7 @@ class mav_vehicle
         remote_last_response_time = std::chrono::system_clock::from_time_t(0);
     bool remote_responding = false;
     bool is_remote_responding() const;
+    bool check_socket(int sock);
 
     std::unordered_map<int, std::chrono::time_point<std::chrono::system_clock>>
         cmd_long_timestamps;
