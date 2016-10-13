@@ -104,6 +104,7 @@ class mav_vehicle
 {
   public:
     mav_vehicle(int socket_fd);
+    mav_vehicle(int socket_fd, uint8_t sysid);
     ~mav_vehicle();
 
     void update();

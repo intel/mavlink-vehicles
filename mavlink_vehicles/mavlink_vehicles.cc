@@ -45,7 +45,6 @@ namespace defaults
 {
 const uint8_t target_system_id = 1;
 const uint8_t target_component_id = 1;
-const uint8_t system_id = 20;
 const uint8_t component_id = 0;
 const float takeoff_init_alt_m = 1.5;
 const float lookat_rot_speed_degps = 90.0;
@@ -85,6 +84,21 @@ bool is_same_socket(sockaddr_storage &r1, sockaddr_storage &r2)
                 ((struct sockaddr_in *)&r2)->sin_addr.s_addr &&
             ((struct sockaddr_in *)&r1)->sin_port ==
                 ((struct sockaddr_in *)&r2)->sin_port);
+}
+
+bool get_socket_info(int sock, sockaddr_storage *info = NULL)
+{
+    struct sockaddr_storage temp_info = {0};
+    socklen_t info_len = sizeof(temp_info);
+    if (getsockname(sock, (struct sockaddr *)&temp_info, &info_len) == -1) {
+        return false;
+    }
+
+    if (info != NULL) {
+        *info = temp_info;
+    }
+
+    return true;
 }
 
 namespace mavlink_vehicles
@@ -465,18 +479,16 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
 
 mav_vehicle::mav_vehicle(int socket_fd)
 {
-    // Store socket
-    this->sock = socket_fd;
+    struct sockaddr_storage our_addr = {0};
+    if (!get_socket_info(socket_fd, &our_addr)) {
+        print_verbose(
+            "Error: the socket provided to the constructor is invalid\n");
+        return;
+    }
 
     // The system_id must be unique for each instance of the mav_vehicle. We
     // will use the port associated to the socket as the system_id of this
-    // instance.
-    struct sockaddr_storage our_addr = {0};
-    socklen_t our_addr_len = sizeof(our_addr);
-    if (getsockname(this->sock, (struct sockaddr *)&our_addr, &our_addr_len) == -1) {
-        print_verbose("The socket provided to the constructor is invalid\n");
-        this->system_id = defaults::system_id;
-    }
+    // instance if system_id is not provided by the caller.
     uint16_t our_port = ntohs(((struct sockaddr_in *)&our_addr)->sin_port);
 
     // TODO: Since mavlink system_ids are uint8_t values while ports are
@@ -486,7 +498,24 @@ mav_vehicle::mav_vehicle(int socket_fd)
     // instance of mav_vehicle. We need to figure out a better way of
     // generating this system_id.
     this->system_id = our_port % UINT8_MAX;
-    print_verbose("Our system id: %d %d\n", this->system_id, our_port);
+    this->sock = socket_fd;
+
+    print_verbose("Our system id: %d", this->system_id);
+    print_verbose("Waiting for vehicle...\n");
+}
+
+mav_vehicle::mav_vehicle(int socket_fd, uint8_t sysid)
+{
+    if (!get_socket_info(socket_fd)) {
+        print_verbose(
+            "Error: the socket provided to the constructor is invalid\n");
+        return;
+    }
+
+    this->system_id = sysid;
+    this->sock = socket_fd;
+
+    print_verbose("Our system id: %d", this->system_id);
     print_verbose("Waiting for vehicle...\n");
 }
 
