@@ -45,7 +45,6 @@ namespace defaults
 {
 const uint8_t target_system_id = 1;
 const uint8_t target_component_id = 1;
-const uint8_t system_id = 20;
 const uint8_t component_id = 0;
 const float takeoff_init_alt_m = 1.5;
 const float lookat_rot_speed_degps = 90.0;
@@ -467,17 +466,13 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
 
 mav_vehicle::mav_vehicle(int socket_fd)
 {
-    // Store socket
-    this->sock = socket_fd;
-
     // The system_id must be unique for each instance of the mav_vehicle. We
     // will use the port associated to the socket as the system_id of this
-    // instance.
+    // instance if system_id is no provided by the caller.
     struct sockaddr_storage our_addr = {0};
     socklen_t our_addr_len = sizeof(our_addr);
     if (getsockname(this->sock, (struct sockaddr *)&our_addr, &our_addr_len) == -1) {
         print_verbose("The socket provided to the constructor is invalid\n");
-        this->system_id = defaults::system_id;
     }
     uint16_t our_port = ntohs(((struct sockaddr_in *)&our_addr)->sin_port);
 
@@ -488,8 +483,32 @@ mav_vehicle::mav_vehicle(int socket_fd)
     // instance of mav_vehicle. We need to figure out a better way of
     // generating this system_id.
     this->system_id = our_port % UINT8_MAX;
-    print_verbose("Our system id: %d %d\n", this->system_id, our_port);
+    this->sock = socket_fd;
+
+    print_verbose("Our system id: %d", this->system_id);
     print_verbose("Waiting for vehicle...\n");
+}
+
+mav_vehicle::mav_vehicle(int socket_fd, uint8_t sysid)
+{
+    this->system_id = sysid;
+    this->sock = socket_fd;
+
+    print_verbose("Our system id: %d", this->system_id);
+    print_verbose("Waiting for vehicle...\n");
+}
+
+bool mav_vehicle::check_socket()
+{
+    struct sockaddr_storage our_addr = {0};
+    socklen_t our_addr_len = sizeof(our_addr);
+    if (getsockname(this->sock, (struct sockaddr *)&our_addr, &our_addr_len) ==
+        -1) {
+        print_verbose("The socket provided to the constructor is invalid\n");
+        return false;
+    }
+
+    return true;
 }
 
 mav_vehicle::~mav_vehicle()
@@ -1177,6 +1196,10 @@ void mav_vehicle::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
 
 void mav_vehicle::update()
 {
+    if(!check_socket()) {
+        return;
+    }
+
     send_heartbeat();
 
     // Check if remote is still responding
