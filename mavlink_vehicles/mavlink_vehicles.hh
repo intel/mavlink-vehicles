@@ -62,19 +62,24 @@ struct local_pos : state_variable {
 
 enum class status { STANDBY, ACTIVE };
 
-enum class mode { GUIDED, AUTO, BRAKE, OTHER };
+enum class mode { GUIDED, AUTO, BRAKE, OTHER, TAKEOFF };
 
 enum class arm_status { ARMED, NOT_ARMED };
 
 enum class gps_status { NO_FIX, FIX_2D_PLUS };
+
+enum class firmware_type { APM, PX4 };
 
 enum class cmd_custom {
     HEARTBEAT,
     SET_MODE_GUIDED,
     SET_MODE_AUTO,
     SET_MODE_BRAKE,
+    SET_MODE_TAKEOFF,
     REQUEST_MISSION_ITEM,
-    ROTATE
+    REQUEST_MISSION_LIST,
+    ROTATE,
+    DETOUR
 };
 
 enum class mission_status {
@@ -103,6 +108,7 @@ class mav_vehicle
 {
   public:
     mav_vehicle(int socket_fd);
+    mav_vehicle(int socket_fd, uint8_t sysid);
     ~mav_vehicle();
 
     void update();
@@ -122,10 +128,10 @@ class mav_vehicle
     global_pos_int get_detour_waypoint();
 
     void takeoff();
-    void arm_throttle();
+    void arm_throttle(bool arm_disarm = true);
     void send_heartbeat();
     void set_mode(mode m);
-    void request_mission_item(uint16_t item_id);
+    void request_mission_list();
 
     // Command the vehicle to immediately stop and rotate before moving to the
     // next detour or mission waypoint.
@@ -148,6 +154,7 @@ class mav_vehicle
                                bool autorotate = false);
     void send_mission_waypoint(global_pos_int global, bool autorotate = false);
     bool is_sending_mission() const;
+    bool is_receiving_mission() const;
 
     // Command the vehicle to brake immediately. The vehicle automatically
     // continues the mission after achieving v=0 if autocontinue is true.
@@ -176,6 +183,10 @@ class mav_vehicle
     std::vector<global_pos_int> mission_items_list;
     bool sending_mission = false;
 
+    bool receiving_mission = false;
+    unsigned int mission_items_list_received_size = 0;
+    std::vector<global_pos_int> mission_items_list_received;
+
     mission_status mstatus = mission_status::NORMAL;
 
     global_pos_int detour_waypoint;
@@ -193,6 +204,7 @@ class mav_vehicle
         std::chrono::system_clock::from_time_t(0);
     bool is_stopped();
 
+    firmware_type flight_stack_type = firmware_type::PX4;
     uint8_t system_id = 0;
     int sock = 0;
     struct sockaddr_storage remote_addr = {0};
@@ -201,6 +213,7 @@ class mav_vehicle
         remote_last_response_time = std::chrono::system_clock::from_time_t(0);
     bool remote_responding = false;
     bool is_remote_responding() const;
+    bool check_socket();
 
     std::unordered_map<int, std::chrono::time_point<std::chrono::system_clock>>
         cmd_long_timestamps;
@@ -215,6 +228,11 @@ class mav_vehicle
     void send_mission_ack(uint8_t type);
     void set_mode(mode m, int timeout);
     void send_mission_count(int n);
+    void request_mission_item(uint16_t item_id);
+    void set_position_target(global_pos_int wp, int timeout);
+    void set_position_target(global_pos_int wp);
+    void set_yaw_target(float yaw, int timeout);
+    void set_yaw_target(float yaw);
 
     friend class msghandler;
 };
