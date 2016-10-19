@@ -500,7 +500,7 @@ mav_vehicle::mav_vehicle(int socket_fd)
     this->system_id = our_port % UINT8_MAX;
     this->sock = socket_fd;
 
-    print_verbose("Our system id: %d", this->system_id);
+    print_verbose("Our system id: %d\n", this->system_id);
     print_verbose("Waiting for vehicle...\n");
 }
 
@@ -515,7 +515,7 @@ mav_vehicle::mav_vehicle(int socket_fd, uint8_t sysid)
     this->system_id = sysid;
     this->sock = socket_fd;
 
-    print_verbose("Our system id: %d", this->system_id);
+    print_verbose("Our system id: %d\n", this->system_id);
     print_verbose("Waiting for vehicle...\n");
 }
 
@@ -698,7 +698,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
         break;
     }
     default:
-        print_verbose("Trying to set unsupported mode");
+        print_verbose("Trying to set unsupported mode\n");
         return;
     }
 
@@ -729,7 +729,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
         cmd_custom_timestamps[cmd] = system_clock::now();
 
         if (send_data(mav_data_buffer, n) == -1) {
-            print_verbose("Error changing mode to GUIDED");
+            print_verbose("Error changing mode to GUIDED\n");
             break;
         }
 
@@ -815,7 +815,7 @@ void mav_vehicle::request_mission_list()
         defaults::target_component_id, defaults::target_system_id);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
     if (send_data(mav_data_buffer, n) == -1) {
-        std::perror("Error requesting mission list");
+        std::perror("Error requesting mission list\n");
     }
 
     // Update timestamp
@@ -850,7 +850,7 @@ void mav_vehicle::request_mission_item(uint16_t item_id)
                                            &mav_mission_request);
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
     if (send_data(mav_data_buffer, n) == -1) {
-        std::perror("Error requesting mission item");
+        std::perror("Error requesting mission item\n");
     }
 
     // Update timestamp
