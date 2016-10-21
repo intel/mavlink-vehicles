@@ -268,6 +268,19 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
 
         print_verbose("Heartbeat received\n");
 
+        // Detect flight stack
+        switch (hb.autopilot) {
+        case MAV_AUTOPILOT_ARDUPILOTMEGA:
+            mav.flight_stack_type = firmware_type::APM;
+            break;
+        case MAV_AUTOPILOT_PX4:
+            mav.flight_stack_type = firmware_type::PX4;
+            break;
+        default:
+            mav.flight_stack_type = firmware_type::UNKNOWN;
+            break;
+        }
+
         // Decode ArduPilot mode flag
         if (mav.flight_stack_type == firmware_type::APM) {
             if (!(hb.base_mode & MAV_MODE_FLAG_CUSTOM_MODE_ENABLED)) {

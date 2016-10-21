@@ -68,7 +68,7 @@ enum class arm_status { ARMED, NOT_ARMED };
 
 enum class gps_status { NO_FIX, FIX_2D_PLUS };
 
-enum class firmware_type { APM, PX4 };
+enum class firmware_type { APM, PX4, UNKNOWN };
 
 enum class cmd_custom {
     HEARTBEAT,
@@ -204,7 +204,7 @@ class mav_vehicle
         std::chrono::system_clock::from_time_t(0);
     bool is_stopped();
 
-    firmware_type flight_stack_type = firmware_type::PX4;
+    firmware_type flight_stack_type = firmware_type::UNKNOWN;
     uint8_t system_id = 0;
     int sock = 0;
     struct sockaddr_storage remote_addr = {0};
