@@ -27,9 +27,9 @@
 #include <sys/types.h>
 #include <vector>
 
+#include "apm.hh"
 #include "mavlink_vehicles.hh"
 #include "px4.hh"
-#include "apm.hh"
 
 #if PRINT_MAVLINK
 #define print_mavlink(...) printf(__VA_ARGS__)
@@ -271,18 +271,18 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         // Detect flight stack
         switch (hb.autopilot) {
         case MAV_AUTOPILOT_ARDUPILOTMEGA:
-            mav.flight_stack_type = firmware_type::APM;
+            mav.autopilot = autopilot_type::APM;
             break;
         case MAV_AUTOPILOT_PX4:
-            mav.flight_stack_type = firmware_type::PX4;
+            mav.autopilot = autopilot_type::PX4;
             break;
         default:
-            mav.flight_stack_type = firmware_type::UNKNOWN;
+            mav.autopilot = autopilot_type::UNKNOWN;
             break;
         }
 
         // Decode ArduPilot mode flag
-        if (mav.flight_stack_type == firmware_type::APM) {
+        if (mav.autopilot == autopilot_type::APM) {
             if (!(hb.base_mode & MAV_MODE_FLAG_CUSTOM_MODE_ENABLED)) {
                 return;
             }
@@ -298,7 +298,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         }
 
         // Decode PX4 mode flag
-        if (mav.flight_stack_type == firmware_type::PX4) {
+        if (mav.autopilot == autopilot_type::PX4) {
             union px4_custom_mode px4_mode;
             px4_mode.data = hb.custom_mode;
             if (px4_mode.main_mode == PX4_CUSTOM_MAIN_MODE_OFFBOARD) {
@@ -408,7 +408,7 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         }
 
         // Ignore if we are not receiving a mission list
-        if(!mav.is_receiving_mission()) {
+        if (!mav.is_receiving_mission()) {
             return;
         }
 
@@ -752,17 +752,17 @@ void mav_vehicle::set_mode(mode m, int timeout)
         mavlink_set_mode_t mav_cmd_set_mode;
         mav_cmd_set_mode.target_system = defaults::target_system_id;
 
-        switch (this->flight_stack_type) {
-        case firmware_type::PX4:
+        switch (this->autopilot) {
+        case autopilot_type::PX4:
             union px4_custom_mode px4_mode;
             px4_mode.data = 0;
             px4_mode.main_mode = PX4_CUSTOM_MAIN_MODE_OFFBOARD;
             px4_mode.sub_mode = 0;
             mav_cmd_set_mode.custom_mode = px4_mode.data;
-            mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED |
-                                         MAV_MODE_FLAG_SAFETY_ARMED;
+            mav_cmd_set_mode.base_mode =
+                MAV_MODE_FLAG_CUSTOM_MODE_ENABLED | MAV_MODE_FLAG_SAFETY_ARMED;
             break;
-        case firmware_type::APM:
+        case autopilot_type::APM:
             mav_cmd_set_mode.custom_mode = APM_CUSTOM_MODE_GUIDED;
             mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
             break;
@@ -796,17 +796,17 @@ void mav_vehicle::set_mode(mode m, int timeout)
         mavlink_set_mode_t mav_cmd_set_mode;
         mav_cmd_set_mode.target_system = defaults::target_system_id;
 
-        switch (this->flight_stack_type) {
-        case firmware_type::PX4:
+        switch (this->autopilot) {
+        case autopilot_type::PX4:
             union px4_custom_mode px4_mode;
             px4_mode.data = 0;
             px4_mode.main_mode = PX4_CUSTOM_MAIN_MODE_AUTO;
             px4_mode.sub_mode = PX4_CUSTOM_SUB_MODE_AUTO_MISSION;
             mav_cmd_set_mode.custom_mode = px4_mode.data;
-            mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED |
-                                         MAV_MODE_FLAG_SAFETY_ARMED;
+            mav_cmd_set_mode.base_mode =
+                MAV_MODE_FLAG_CUSTOM_MODE_ENABLED | MAV_MODE_FLAG_SAFETY_ARMED;
             break;
-        case firmware_type::APM:
+        case autopilot_type::APM:
             mav_cmd_set_mode.custom_mode = APM_CUSTOM_MODE_AUTO;
             mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
             break;
@@ -835,7 +835,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
     case mode::TAKEOFF: {
 
         // This mode is available on PX4 only
-        if (this->flight_stack_type != firmware_type::PX4) {
+        if (this->autopilot != autopilot_type::PX4) {
             print_verbose(
                 "Error: mode::TAKEOFF is available for PX4 only. "
                 "Call to set_mode(mode::TAKEOFF) has been ignored.\n");
@@ -886,24 +886,23 @@ void mav_vehicle::set_mode(mode m, int timeout)
         mavlink_set_mode_t mav_cmd_set_mode;
         mav_cmd_set_mode.target_system = defaults::target_system_id;
 
-        switch (this->flight_stack_type) {
-        case firmware_type::PX4:
+        switch (this->autopilot) {
+        case autopilot_type::PX4:
             union px4_custom_mode px4_mode;
             px4_mode.data = 0;
             px4_mode.main_mode = PX4_CUSTOM_MAIN_MODE_AUTO;
             px4_mode.sub_mode = PX4_CUSTOM_SUB_MODE_AUTO_LOITER;
             mav_cmd_set_mode.custom_mode = px4_mode.data;
-            mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED |
-                                         MAV_MODE_FLAG_SAFETY_ARMED;
+            mav_cmd_set_mode.base_mode =
+                MAV_MODE_FLAG_CUSTOM_MODE_ENABLED | MAV_MODE_FLAG_SAFETY_ARMED;
             break;
-        case firmware_type::APM:
+        case autopilot_type::APM:
             mav_cmd_set_mode.custom_mode = APM_CUSTOM_MODE_BRAKE;
             mav_cmd_set_mode.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
             break;
         default:
             break;
         }
-
 
         // Encode and send
         uint8_t mav_data_buffer[defaults::send_buffer_len];
@@ -999,13 +998,13 @@ void mav_vehicle::arm_throttle(bool arm_disarm)
 
 void mav_vehicle::takeoff()
 {
-    switch (this->flight_stack_type) {
-    case firmware_type::PX4:
+    switch (this->autopilot) {
+    case autopilot_type::PX4:
         if (this->get_status() != status::ACTIVE) {
             this->set_mode(mode::TAKEOFF);
         }
         break;
-    case firmware_type::APM:
+    case autopilot_type::APM:
         if (this->get_mode() != mode::GUIDED) {
             this->set_mode(mode::GUIDED);
         }
@@ -1048,7 +1047,7 @@ void mav_vehicle::rotate(double angle_rad, bool autocontinue)
         this->rotation_goal = this->rotation_goal + 2 * M_PI;
     }
 
-    if (this->flight_stack_type == firmware_type::PX4) {
+    if (this->autopilot == autopilot_type::PX4) {
         this->set_yaw_target(this->rotation_goal, 0);
     } else {
         this->set_yaw_target(fmod(angle_rad, (2 * M_PI)), 0);
@@ -1104,7 +1103,7 @@ void mav_vehicle::send_mission_waypoint(global_pos_int wp, bool autorotate)
 
     // We need to toggle from AUTO to GUIDED in order to update ArduPilot
     // mission waypoints.
-    if (this->flight_stack_type == firmware_type::APM) {
+    if (this->autopilot == autopilot_type::APM) {
         set_mode(mode::GUIDED, 0);
     }
 
@@ -1188,8 +1187,8 @@ void mav_vehicle::set_yaw_target(float yaw, int timeout)
         return;
     }
 
-    switch (this->flight_stack_type) {
-    case firmware_type::PX4:{
+    switch (this->autopilot) {
+    case autopilot_type::PX4: {
         mavlink_set_position_target_local_ned_t set_position;
 
         // Set mavlink message timestamp
@@ -1241,7 +1240,7 @@ void mav_vehicle::set_yaw_target(float yaw, int timeout)
         }
         break;
     }
-    case firmware_type::APM: {
+    case autopilot_type::APM: {
 
         // APM mode needs to be set before sending the command
         if (this->get_mode() != mode::GUIDED) {
@@ -1276,8 +1275,8 @@ void mav_vehicle::set_position_target(global_pos_int wp, int timeout)
     local_pos local_pos_ned =
         math::global_to_local_ned(wp, this->get_home_position_int());
 
-    switch (this->flight_stack_type) {
-    case firmware_type::PX4: {
+    switch (this->autopilot) {
+    case autopilot_type::PX4: {
         cmd_custom cmd = cmd_custom::DETOUR;
 
         // Check if command has been sent recently
@@ -1334,7 +1333,7 @@ void mav_vehicle::set_position_target(global_pos_int wp, int timeout)
         }
         break;
     }
-    case firmware_type::APM: {
+    case autopilot_type::APM: {
         mavlink_mission_item_t mav_waypoint;
 
         // APM mode needs to be set before sending the command
@@ -1599,20 +1598,21 @@ void mav_vehicle::update()
         request_mission_list();
     }
 
-    // Perform the next steps only if we are in control and if the vehicle is ready
+    // Perform the next steps only if we are in control and if the vehicle is
+    // ready
     if (!this->is_ready() || !this->is_our_control) {
         return;
     }
 
     // If we are in a detour we need to keep sending the waypoint to maintain
     // PX4 in offboard mode
-    if (is_detour_active() && this->flight_stack_type == firmware_type::PX4) {
+    if (is_detour_active() && this->autopilot == autopilot_type::PX4) {
         this->set_position_target(this->detour_waypoint);
     }
 
     // If we are in rotation mode, we need to keep sending the attitude to
     // maintain px4 in offboard mode
-    if (is_rotation_active() && this->flight_stack_type == firmware_type::PX4) {
+    if (is_rotation_active() && this->autopilot == autopilot_type::PX4) {
         this->set_yaw_target(this->rotation_goal);
     }
 
@@ -1631,8 +1631,8 @@ void mav_vehicle::update()
         if (this->detour_waypoint_autocontinue) {
             this->is_our_control = true;
             this->set_mode(mode::AUTO, 0);
-        }else {
-           this->brake(false);
+        } else {
+            this->brake(false);
         }
     }
 
@@ -1653,7 +1653,6 @@ void mav_vehicle::update()
                 break;
             }
         }
-
     }
 
     // Check if a rotation has been finished in order to continue the mission
@@ -1678,7 +1677,7 @@ void mav_vehicle::update()
                 break;
             }
         } else {
-           this->brake(false);
+            this->brake(false);
         }
     }
 
