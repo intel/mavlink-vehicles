@@ -675,8 +675,8 @@ void mav_vehicle::send_heartbeat()
     cmd_custom cmd = cmd_custom::HEARTBEAT;
 
     // Check if this command has been sent recently
-    if (cmd_custom_timestamps.count(cmd) &&
-        !is_timedout(cmd_custom_timestamps[cmd],
+    if (cmd_custom_timestamps.count((int)cmd) &&
+        !is_timedout(cmd_custom_timestamps[(int)cmd],
                      request_intervals_ms::heartbeat)) {
         return;
     }
@@ -697,7 +697,7 @@ void mav_vehicle::send_heartbeat()
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
 
     // Update timestamp
-    cmd_custom_timestamps[cmd] = system_clock::now();
+    cmd_custom_timestamps[(int)cmd] = system_clock::now();
 
     if (send_data(mav_data_buffer, n) == -1) {
         print_verbose("Error sending heartbeat\n");
@@ -737,8 +737,8 @@ void mav_vehicle::set_mode(mode m, int timeout)
     }
 
     // Check if this command has been sent recently
-    if (cmd_custom_timestamps.count(cmd) &&
-        !is_timedout(cmd_custom_timestamps[cmd], timeout)) {
+    if (cmd_custom_timestamps.count((int)cmd) &&
+        !is_timedout(cmd_custom_timestamps[(int)cmd], timeout)) {
         return;
     }
 
@@ -777,7 +777,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
         int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
 
         // Update timestamp
-        cmd_custom_timestamps[cmd] = system_clock::now();
+        cmd_custom_timestamps[(int)cmd] = system_clock::now();
 
         if (send_data(mav_data_buffer, n) == -1) {
             print_verbose("Error changing mode to GUIDED\n");
@@ -822,7 +822,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
         send_data(mav_data_buffer, n);
 
         // Update timestamp
-        cmd_custom_timestamps[cmd] = system_clock::now();
+        cmd_custom_timestamps[(int)cmd] = system_clock::now();
 
         if (send_data(mav_data_buffer, n) == -1) {
             print_verbose("Error changing mode to AUTO\n");
@@ -868,7 +868,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
         send_data(mav_data_buffer, n);
 
         // Update timestamp
-        cmd_custom_timestamps[cmd] = system_clock::now();
+        cmd_custom_timestamps[(int)cmd] = system_clock::now();
 
         if (send_data(mav_data_buffer, n) == -1) {
             print_verbose("Error changing mode to TAKEOFF\n");
@@ -912,7 +912,7 @@ void mav_vehicle::set_mode(mode m, int timeout)
         send_data(mav_data_buffer, n);
 
         // Update timestamp
-        cmd_custom_timestamps[cmd] = system_clock::now();
+        cmd_custom_timestamps[(int)cmd] = system_clock::now();
 
         if (send_data(mav_data_buffer, n) == -1) {
             print_verbose("Error changing mode to BRAKE\n");
@@ -932,8 +932,8 @@ void mav_vehicle::request_mission_list()
     cmd_custom cmd = cmd_custom::REQUEST_MISSION_LIST;
 
     // Check if this command has been sent recently
-    if (cmd_custom_timestamps.count(cmd) &&
-        !is_timedout(cmd_custom_timestamps[cmd],
+    if (cmd_custom_timestamps.count((int)cmd) &&
+        !is_timedout(cmd_custom_timestamps[(int)cmd],
                      request_intervals_ms::request_mission_list)) {
         return;
     }
@@ -950,7 +950,7 @@ void mav_vehicle::request_mission_list()
     }
 
     // Update timestamp
-    cmd_custom_timestamps[cmd] = std::chrono::system_clock::now();
+    cmd_custom_timestamps[(int)cmd] = std::chrono::system_clock::now();
 
     this->receiving_mission = true;
     print_verbose("Mission list requested\n");
@@ -961,8 +961,8 @@ void mav_vehicle::request_mission_item(uint16_t item_id)
     cmd_custom cmd = cmd_custom::REQUEST_MISSION_ITEM;
 
     // Check if this command has been sent recently
-    if (cmd_custom_timestamps.count(cmd) &&
-        !is_timedout(cmd_custom_timestamps[cmd],
+    if (cmd_custom_timestamps.count((int)cmd) &&
+        !is_timedout(cmd_custom_timestamps[(int)cmd],
                      request_intervals_ms::request_mission_item)) {
         return;
     }
@@ -985,7 +985,7 @@ void mav_vehicle::request_mission_item(uint16_t item_id)
     }
 
     // Update timestamp
-    cmd_custom_timestamps[cmd] = std::chrono::system_clock::now();
+    cmd_custom_timestamps[(int)cmd] = std::chrono::system_clock::now();
 
     print_verbose("Mission waypoint requested %d\n", item_id);
 }
@@ -1182,8 +1182,8 @@ void mav_vehicle::set_yaw_target(float yaw, int timeout)
     cmd_custom cmd = cmd_custom::ROTATE;
 
     // Check if cmd_custom::ROTATE has been sent recently
-    if (cmd_custom_timestamps.count(cmd) &&
-        !is_timedout(cmd_custom_timestamps[cmd], timeout)) {
+    if (cmd_custom_timestamps.count((int)cmd) &&
+        !is_timedout(cmd_custom_timestamps[(int)cmd], timeout)) {
         return;
     }
 
@@ -1262,7 +1262,7 @@ void mav_vehicle::set_yaw_target(float yaw, int timeout)
     }
 
     // Update timestamp
-    cmd_custom_timestamps[cmd] = std::chrono::system_clock::now();
+    cmd_custom_timestamps[(int)cmd] = std::chrono::system_clock::now();
 }
 
 void mav_vehicle::set_position_target(global_pos_int wp)
@@ -1280,8 +1280,8 @@ void mav_vehicle::set_position_target(global_pos_int wp, int timeout)
         cmd_custom cmd = cmd_custom::DETOUR;
 
         // Check if command has been sent recently
-        if (cmd_custom_timestamps.count(cmd) &&
-            !is_timedout(cmd_custom_timestamps[cmd], timeout)) {
+        if (cmd_custom_timestamps.count((int)cmd) &&
+            !is_timedout(cmd_custom_timestamps[(int)cmd], timeout)) {
             return;
         }
 
@@ -1462,8 +1462,8 @@ void mav_vehicle::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
     using namespace std::chrono;
 
     // Check if this command has been sent recently
-    if (cmd_long_timestamps.count(cmd) &&
-        !is_timedout(cmd_long_timestamps[cmd], timeout)) {
+    if (cmd_long_timestamps.count((int)cmd) &&
+        !is_timedout(cmd_long_timestamps[(int)cmd], timeout)) {
         return;
     }
 
@@ -1489,7 +1489,7 @@ void mav_vehicle::send_cmd_long(int cmd, float p1, float p2, float p3, float p4,
     int n = mavlink_msg_to_send_buffer(mav_data_buffer, &mav_msg);
 
     // Update timestamp
-    cmd_long_timestamps[cmd] = system_clock::now();
+    cmd_long_timestamps[(int)cmd] = system_clock::now();
 
     if (send_data(mav_data_buffer, n) == -1) {
         print_verbose("Error sending command long\n");
