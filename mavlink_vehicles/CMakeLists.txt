@@ -5,7 +5,7 @@ find_program(PYTHON python)
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 find_package(Threads REQUIRED)
 
-set(CUSTOM_COMPILE_FLAGS "${CUSTOM_COMPILE_FLAGS} -Wall -pthread")
+set(CUSTOM_COMPILE_FLAGS "${CUSTOM_COMPILE_FLAGS} -Wall -pthread -std=c++11")
 set(LDFLAGS "${LDFLAGS} -z noexecstack -z relro -z now")
 set(CFLAGS "${CFLAGS} -fstack-protector-all -fPIE -fPIC -O2 -D_FORTIFY_SOURCE=2")
 set(CFLAGS "${CFLAGS} -Wformat -Wformat-security")
