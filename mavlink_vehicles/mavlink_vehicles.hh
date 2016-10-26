@@ -209,10 +209,19 @@ class mav_vehicle
     bool remote_responding = false;
     bool is_remote_responding() const;
 
+    struct EnumHash
+    {
+        template <typename T> std::size_t operator()(T t) const
+        {
+            return static_cast<std::size_t>(t);
+        }
+    };
+
     std::unordered_map<int, std::chrono::time_point<std::chrono::system_clock>>
         cmd_long_timestamps;
     std::unordered_map<cmd_custom,
-                       std::chrono::time_point<std::chrono::system_clock>>
+                       std::chrono::time_point<std::chrono::system_clock>,
+                       EnumHash>
         cmd_custom_timestamps;
 
     ssize_t send_data(uint8_t *data, size_t len);
