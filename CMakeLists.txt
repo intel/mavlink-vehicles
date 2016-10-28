@@ -4,6 +4,19 @@ cmake_minimum_required(VERSION 2.8.12.2 FATAL_ERROR)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MAVLINK REQUIRED mavlink)
 
+# Generate documentation
+find_package(Doxygen)
+set(GENERATED_DOC_DIR "${CMAKE_CURRENT_BINARY_DIR}/doc")
+if(DOXYGEN_FOUND)
+    file(MAKE_DIRECTORY ${GENERATED_DOC_DIR})
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in
+                   ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile @ONLY)
+    add_custom_target(doc ALL
+                      ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+                      WORKING_DIRECTORY ${GENERATED_DOC_DIR}
+                      COMMENT "Generating API documentation" VERBATIM)
+endif(DOXYGEN_FOUND)
+
 # Set debug variables
 if(NOT DEFINED PRINT_MAVLINK)
     set(PRINT_MAVLINK false)
