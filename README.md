@@ -5,6 +5,9 @@ between an air vehicle and a ground station.
 
 ## Requirements ##
     * Mavlink (https:https://github.com/mavlink/mavlink)
+
+The following requirements are only needed for running the tests:
+
     * MavProxy (https://github.com/ArduPilot/MAVProxy)
     * Ardupilot (https://github.com/ArduPilot/ardupilot)
 
@@ -18,6 +21,13 @@ $PKG_CONFIG_PATH should be set with the following command:
 
     ```
     export PKG_CONFIG_PATH=${PKG_CONFIG_PATH}:/usr/local/lib/pkgconfig
+    ```
+
+    To check if pkg-config is able to find mavlink, the following command should
+yield the installed version of mavlink:
+
+    ```
+    pkg-config --version mavlink
     ```
 
 2. Create a build folder and compile using CMAKE as follows:
