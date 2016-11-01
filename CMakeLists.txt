@@ -33,12 +33,12 @@ set(ADDITIONAL_COMPILE_FLAGS "${ADDITIONAL_COMPILE_FLAGS} -Wformat -Wformat-secu
 set(ADDITIONAL_COMPILE_FLAGS "${ADDITIONAL_COMPILE_FLAGS} -Wall -std=c++11")
 set(ADDITIONAL_LINK_FLAGS "-z noexecstack -z relro -z now")
 
-# Include directories
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src ${MAVLINK_INCLUDE_DIRS}/v1.0/autoquad)
-
 # Build Library
 add_library(mavlink_vehicles src/mavlink_vehicles.cc)
 set_target_properties(mavlink_vehicles PROPERTIES COMPILE_FLAGS "${ADDITIONAL_COMPILE_FLAGS}")
+target_include_directories(mavlink_vehicles PUBLIC
+                           "${CMAKE_CURRENT_SOURCE_DIR}/src"
+                           "${MAVLINK_INCLUDE_DIRS}/v1.0/autoquad")
 
 # Build Tests
 add_executable(tests tests/tests.cc)
