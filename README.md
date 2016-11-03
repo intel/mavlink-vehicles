@@ -27,7 +27,7 @@ $PKG_CONFIG_PATH should be set with the following command:
 yield the installed version of mavlink:
 
     ```
-    pkg-config --version mavlink
+    pkg-config --modversion mavlink
     ```
 
 2. Create a build folder and compile using CMAKE as follows:
