@@ -11,7 +11,7 @@ if(DOXYGEN_FOUND)
     file(MAKE_DIRECTORY ${GENERATED_DOC_DIR})
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in
                    ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile @ONLY)
-    add_custom_target(doc ALL
+    add_custom_target(doc
                       ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
                       WORKING_DIRECTORY ${GENERATED_DOC_DIR}
                       COMMENT "Generating API documentation" VERBATIM)
