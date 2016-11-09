@@ -24,6 +24,11 @@
 #include <unordered_map>
 #include <vector>
 
+//!
+//! @file
+//! @brief Mavlink Vehicles library
+//!
+
 namespace mavlink_vehicles
 {
 
