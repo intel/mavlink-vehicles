@@ -201,7 +201,6 @@ double get_waypoint_rel_angle(global_pos_int wp_pos, global_pos_int ref_pos,
 }
 
 /**
- * @class mav_vehicle Mavlink Vehicle abstraction
  * @brief Mavlink Vehicle abstraction
  */
 class mav_vehicle
