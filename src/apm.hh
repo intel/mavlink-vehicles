@@ -22,7 +22,7 @@
  */
 
 /**
- * APM custom modes
+ * @brief APM custom modes
  */
 enum APM_CUSTOM_MODE {
     APM_CUSTOM_MODE_GUIDED = 4,
