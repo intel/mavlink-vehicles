@@ -50,7 +50,7 @@ enum PX4_CUSTOM_SUB_MODE_AUTO {
 };
 
 /**
- * @brief PX4 custom mode storage
+ * @brief PX4 custom mode data type
  */
 union px4_custom_mode {
     struct {
