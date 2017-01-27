@@ -1,8 +1,15 @@
-cmake_minimum_required(VERSION 2.8.12.2 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
 
-# Find required packages
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MAVLINK REQUIRED mavlink)
+# Support Yocto SDK
+if(DEFINED ENV{SDKTARGETSYSROOT})
+    message(STATUS "Using Yocto Environment to build")
+    set(CMAKE_FIND_ROOT_PATH $ENV{SDKTARGETSYSROOT})
+endif()
+
+find_path(MAVLINK_INCLUDE_DIR "mavlink.h"
+    PATH_SUFFIXES "autoquad"
+                  "v1.0/autoquad"
+                  "mavlink/v1.0/autoquad")
 
 # Generate documentation
 find_package(Doxygen)
@@ -38,7 +45,7 @@ add_library(mavlink_vehicles src/mavlink_vehicles.cc)
 set_target_properties(mavlink_vehicles PROPERTIES COMPILE_FLAGS "${ADDITIONAL_COMPILE_FLAGS}")
 target_include_directories(mavlink_vehicles PUBLIC
                            "${CMAKE_CURRENT_SOURCE_DIR}/src"
-                           "${MAVLINK_INCLUDE_DIRS}/v1.0/autoquad")
+                           "${MAVLINK_INCLUDE_DIR}")
 
 # Build Tests
 add_executable(tests tests/tests.cc)
