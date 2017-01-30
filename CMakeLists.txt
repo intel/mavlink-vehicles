@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
 
+# Make out of source builds mandatory
+set(CMAKE_DISABLE_SOURCE_CHANGES ON)
+set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
+
 # Support Yocto SDK
 if(DEFINED ENV{SDKTARGETSYSROOT})
     message(STATUS "Using Yocto Environment to build")
