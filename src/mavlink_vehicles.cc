@@ -48,7 +48,7 @@ namespace defaults
 const uint8_t target_system_id = 1;
 const uint8_t target_component_id = 1;
 const uint8_t component_id = 0;
-const float takeoff_init_alt_m = 1.5;
+const float takeoff_init_alt_m = 2.5;
 const float lookat_rot_speed_degps = 90.0;
 const size_t send_buffer_len = 2041;
 const uint16_t remote_max_response_time_ms = 10000;
