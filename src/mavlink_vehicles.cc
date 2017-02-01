@@ -1002,6 +1002,9 @@ void mav_vehicle::takeoff()
 {
     switch (this->autopilot) {
     case autopilot_type::PX4:
+        if (this->get_arm_status() != arm_status::ARMED) {
+            this->arm_throttle();
+        }
         if (this->get_status() != status::ACTIVE) {
             this->set_mode(mode::TAKEOFF);
         }
