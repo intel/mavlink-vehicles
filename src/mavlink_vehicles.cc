@@ -501,7 +501,14 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mav.received_mission.reserve(mission_count.count);
         mav.received_mission.clear();
         mav.mission_size = mission_count.count;
+
+        if (mission_count.count == 0) {
+            mav.receiving_mission = false;
+            return;
+        }
+
         mav.request_mission_item(0);
+
         return;
     }
     }
@@ -571,11 +578,6 @@ bool mav_vehicle::is_ready()
 
     // Check if home position has been received
     if (!get_home_position_int().is_initialized()) {
-        return false;
-    }
-
-    // Also check if mission waypoint has been received.
-    if (!get_mission_waypoint().is_initialized()) {
         return false;
     }
 
