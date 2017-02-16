@@ -4,7 +4,7 @@ A Mavlink wrapper dedicated to the most common messages that are exchanged
 between an air vehicle and a ground station.
 
 ## Requirements ##
-    * Mavlink (https:https://github.com/mavlink/mavlink)
+    * Python 2.7+ (to generate mavlink headers)
 
 The following requirements are only needed for running the tests:
 
@@ -13,21 +13,10 @@ The following requirements are only needed for running the tests:
 
 ## Build and Install ##
 
-1. Make sure you have all dependencies properly installed in your system.
-
-2. Check if $PKG_CONFIG_PATH points to the location of the mavlink pkg-config
-configuration file. If you have installed Mavlink using its cmake defaults,
-$PKG_CONFIG_PATH should be set with the following command:
+1. Make sure you have initialized the submodules of this project:
 
     ```
-    export PKG_CONFIG_PATH=${PKG_CONFIG_PATH}:/usr/local/lib/pkgconfig
-    ```
-
-    To check if pkg-config is able to find mavlink, the following command should
-yield the installed version of mavlink:
-
-    ```
-    pkg-config --modversion mavlink
+    git submodule udpate --init --recursive
     ```
 
 2. Create a build folder and compile using CMAKE as follows:
