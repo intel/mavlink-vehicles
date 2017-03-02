@@ -427,6 +427,8 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             global_mission_item.alt = mission_item.z * 1e3 + mav.home.alt;
             break;
         }
+        case MAV_FRAME_MISSION:
+            break;
         default: {
             // Other types of frames are not supported
             print_verbose("Received mission item with "
