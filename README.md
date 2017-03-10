@@ -1,5 +1,10 @@
 # Mavlink Vehicle Abstraction Layer #
 
+<a href="https://scan.coverity.com/projects/01org-mavlink-vehicles">
+  <img alt="Coverity Scan Build Status"
+       src="https://scan.coverity.com/projects/11939/badge.svg"/>
+</a>
+
 A Mavlink wrapper dedicated to the most common messages that are exchanged
 between an air vehicle and a ground station.
 
