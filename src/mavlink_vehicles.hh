@@ -44,18 +44,18 @@ struct attitude : state_variable {
 };
 
 struct global_pos_int : state_variable {
-    int32_t lat; // Degrees * 1e7
-    int32_t lon; // Degrees * 1e7
-    int32_t alt; // Millimeters (AMSL)
+    int32_t lat = 0; // Degrees * 1e7
+    int32_t lon = 0; // Degrees * 1e7
+    int32_t alt = 0; // Millimeters (AMSL)
     global_pos_int() {}
     global_pos_int(int32_t _lat, int32_t _lon, int32_t _alt)
         : lat(_lat), lon(_lon), alt(_alt) {}
 };
 
 struct local_pos : state_variable {
-    float x; // Meters
-    float y; // Meters
-    float z; // Meters
+    float x = 0.0; // Meters
+    float y = 0.0; // Meters
+    float z = 0.0; // Meters
     local_pos() {}
     local_pos(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
 };
@@ -160,10 +160,10 @@ class mav_vehicle
     void take_control(bool take_control);
 
   private:
-    status stat;
-    arm_status arm_stat;
-    gps_status gps;
-    mode base_mode;
+    status stat = status::STANDBY;
+    arm_status arm_stat = arm_status::NOT_ARMED;
+    gps_status gps = gps_status::NO_FIX;
+    mode base_mode = mode::OTHER;
 
     attitude att;
     local_pos local;
