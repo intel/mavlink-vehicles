@@ -544,15 +544,14 @@ mav_vehicle::mav_vehicle(int socket_fd)
 }
 
 mav_vehicle::mav_vehicle(int socket_fd, uint8_t sysid)
+	: system_id(sysid),
+	  sock(socket_fd)
 {
     if (!get_socket_info(socket_fd)) {
         print_verbose(
             "Error: the socket provided to the constructor is invalid\n");
         return;
     }
-
-    this->system_id = sysid;
-    this->sock = socket_fd;
 
     print_verbose("Our system id: %d\n", this->system_id);
     print_verbose("Waiting for vehicle...\n");
