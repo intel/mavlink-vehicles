@@ -9,10 +9,10 @@ A Mavlink wrapper dedicated to the most common messages that are exchanged
 between an air vehicle and a ground station.
 
 ## Requirements ##
+To generate MAVLink headers during the build:
   * Python 2.7+
   * python future
-  Both required to generate MAVLink headers.
-
+  
 The following requirements are only needed for running the tests:
 
   * MavProxy (https://github.com/ArduPilot/MAVProxy)
