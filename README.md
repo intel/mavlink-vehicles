@@ -9,19 +9,21 @@ A Mavlink wrapper dedicated to the most common messages that are exchanged
 between an air vehicle and a ground station.
 
 ## Requirements ##
-    * Python 2.7+ (to generate mavlink headers)
+  * Python 2.7+
+  * python future
+  Both required to generate MAVLink headers.
 
 The following requirements are only needed for running the tests:
 
-    * MavProxy (https://github.com/ArduPilot/MAVProxy)
-    * Ardupilot (https://github.com/ArduPilot/ardupilot)
+  * MavProxy (https://github.com/ArduPilot/MAVProxy)
+  * ArduPilot (https://github.com/ArduPilot/ardupilot)
 
 ## Build and Install ##
 
 1. Make sure you have initialized the submodules of this project:
 
     ```
-    git submodule udpate --init --recursive
+    git submodule update --init --recursive
     ```
 
 2. Create a build folder and compile using CMAKE as follows:
