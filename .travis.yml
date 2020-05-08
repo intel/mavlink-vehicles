@@ -1,0 +1,25 @@
+language: cpp
+dist: trusty
+cache: pip
+matrix:
+  include:
+    - os: linux
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-6
+            - gcc-6
+            - cmake
+            - python-pip
+
+before_script:
+        - CXX="g++-6"
+        - CC="gcc-6"
+        - pip install --user future 
+        - git submodule update --init --recursive
+
+script:
+        - mkdir build && cd build && cmake ..
+        - make -j

@@ -1,33 +1,29 @@
 # Mavlink Vehicle Abstraction Layer #
 
+[![Build Status](https://travis-ci.org/01org/camera-streaming-daemon.svg?branch=master)](https://travis-ci.org/01org/camera-streaming-daemon) <a href="https://scan.coverity.com/projects/01org-mavlink-vehicles">
+  <img alt="Coverity Scan Build Status"
+       src="https://scan.coverity.com/projects/11939/badge.svg"/>
+</a>
+
 A Mavlink wrapper dedicated to the most common messages that are exchanged
 between an air vehicle and a ground station.
 
 ## Requirements ##
-    * Mavlink (https:https://github.com/mavlink/mavlink)
-
+To generate MAVLink headers during the build:
+  * Python 2.7+
+  * python future
+  
 The following requirements are only needed for running the tests:
 
-    * MavProxy (https://github.com/ArduPilot/MAVProxy)
-    * Ardupilot (https://github.com/ArduPilot/ardupilot)
+  * MavProxy (https://github.com/ArduPilot/MAVProxy)
+  * ArduPilot (https://github.com/ArduPilot/ardupilot)
 
 ## Build and Install ##
 
-1. Make sure you have all dependencies properly installed in your system.
-
-2. Check if $PKG_CONFIG_PATH points to the location of the mavlink pkg-config
-configuration file. If you have installed Mavlink using its cmake defaults,
-$PKG_CONFIG_PATH should be set with the following command:
+1. Make sure you have initialized the submodules of this project:
 
     ```
-    export PKG_CONFIG_PATH=${PKG_CONFIG_PATH}:/usr/local/lib/pkgconfig
-    ```
-
-    To check if pkg-config is able to find mavlink, the following command should
-yield the installed version of mavlink:
-
-    ```
-    pkg-config --modversion mavlink
+    git submodule update --init --recursive
     ```
 
 2. Create a build folder and compile using CMAKE as follows:

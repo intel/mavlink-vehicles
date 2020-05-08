@@ -1,8 +1,29 @@
-cmake_minimum_required(VERSION 2.8.12.2 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
 
-# Find required packages
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MAVLINK REQUIRED mavlink)
+find_program(PYTHON2 python2)
+if (NOT PYTHON2)
+    message(SEND_ERROR "Python 2 required but not found.")
+endif()
+
+# Make out of source builds mandatory
+set(CMAKE_DISABLE_SOURCE_CHANGES ON)
+set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
+
+# Support Yocto SDK
+if(DEFINED ENV{SDKTARGETSYSROOT})
+    message(STATUS "Using Yocto Environment to build")
+    set(CMAKE_FIND_ROOT_PATH $ENV{SDKTARGETSYSROOT})
+endif()
+
+# Generate Mavlink Messages
+set(MAVLINK_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include/mavlink)
+include_directories(${MAVLINK_INCLUDE_DIR} ${MAVLINK_INCLUDE_DIR}/common)
+execute_process(COMMAND ${PYTHON2}
+                ${CMAKE_CURRENT_SOURCE_DIR}/modules/mavlink/pymavlink/tools/mavgen.py
+                ${CMAKE_CURRENT_SOURCE_DIR}/modules/mavlink/message_definitions/v1.0/common.xml
+                --wire-protocol 2.0
+                --lang C
+                -o ${MAVLINK_INCLUDE_DIR})
 
 # Generate documentation
 find_package(Doxygen)
@@ -37,8 +58,7 @@ set(ADDITIONAL_LINK_FLAGS "-z noexecstack -z relro -z now")
 add_library(mavlink_vehicles src/mavlink_vehicles.cc)
 set_target_properties(mavlink_vehicles PROPERTIES COMPILE_FLAGS "${ADDITIONAL_COMPILE_FLAGS}")
 target_include_directories(mavlink_vehicles PUBLIC
-                           "${CMAKE_CURRENT_SOURCE_DIR}/src"
-                           "${MAVLINK_INCLUDE_DIRS}/v1.0/autoquad")
+                           "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 # Build Tests
 add_executable(tests tests/tests.cc)

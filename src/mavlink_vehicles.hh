@@ -58,9 +58,9 @@ struct attitude : state_variable {
  * @brief Store vehicle global position in ENU
  */
 struct global_pos_int : state_variable {
-    int32_t lat; /**< @brief Latitude in degrees * 1e7 */
-    int32_t lon; /**< @brief Longitude in degrees * 1e7 */
-    int32_t alt; /**< @brief Millimeters (AMSL) */
+    int32_t lat = 0; /**< @brief Latitude in degrees * 1e7 */
+    int32_t lon = 0; /**< @brief Longitude in degrees * 1e7 */
+    int32_t alt = 0; /**< @brief Millimeters (AMSL) */
     global_pos_int() {}
     global_pos_int(int32_t _lat, int32_t _lon, int32_t _alt)
         : lat(_lat), lon(_lon), alt(_alt) {}
@@ -70,9 +70,9 @@ struct global_pos_int : state_variable {
  * @brief Store vehicle local position in ENU or NED
  */
 struct local_pos : state_variable {
-    float x;  /**< @brief X position in meters */
-    float y;  /**< @brief Y position in meters */
-    float z;  /**< @brief Z position in meters */
+    float x = 0.0;  /**< @brief X position in meters */
+    float y = 0.0;  /**< @brief Y position in meters */
+    float z = 0.0;  /**< @brief Z position in meters */
     local_pos() {}
     local_pos(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
 };
@@ -470,10 +470,10 @@ class mav_vehicle
     public: void take_control(bool take_control);
 
   private:
-    status stat;
-    arm_status arm_stat;
-    gps_status gps;
-    mode base_mode;
+    status stat = status::STANDBY;
+    arm_status arm_stat = arm_status::NOT_ARMED;
+    gps_status gps = gps_status::NO_FIX;
+    mode base_mode = mode::OTHER;
 
     attitude att;
     local_pos local;

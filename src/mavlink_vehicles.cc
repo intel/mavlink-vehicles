@@ -48,7 +48,7 @@ namespace defaults
 const uint8_t target_system_id = 1;
 const uint8_t target_component_id = 1;
 const uint8_t component_id = 0;
-const float takeoff_init_alt_m = 1.5;
+const float takeoff_init_alt_m = 2.5;
 const float lookat_rot_speed_degps = 90.0;
 const size_t send_buffer_len = 2041;
 const uint16_t remote_max_response_time_ms = 10000;
@@ -427,6 +427,8 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
             global_mission_item.alt = mission_item.z * 1e3 + mav.home.alt;
             break;
         }
+        case MAV_FRAME_MISSION:
+            break;
         default: {
             // Other types of frames are not supported
             print_verbose("Received mission item with "
@@ -501,7 +503,14 @@ void msghandler::handle(mav_vehicle &mav, const mavlink_message_t *msg)
         mav.received_mission.reserve(mission_count.count);
         mav.received_mission.clear();
         mav.mission_size = mission_count.count;
+
+        if (mission_count.count == 0) {
+            mav.receiving_mission = false;
+            return;
+        }
+
         mav.request_mission_item(0);
+
         return;
     }
     }
@@ -535,15 +544,14 @@ mav_vehicle::mav_vehicle(int socket_fd)
 }
 
 mav_vehicle::mav_vehicle(int socket_fd, uint8_t sysid)
+	: system_id(sysid),
+	  sock(socket_fd)
 {
     if (!get_socket_info(socket_fd)) {
         print_verbose(
             "Error: the socket provided to the constructor is invalid\n");
         return;
     }
-
-    this->system_id = sysid;
-    this->sock = socket_fd;
 
     print_verbose("Our system id: %d\n", this->system_id);
     print_verbose("Waiting for vehicle...\n");
@@ -571,11 +579,6 @@ bool mav_vehicle::is_ready()
 
     // Check if home position has been received
     if (!get_home_position_int().is_initialized()) {
-        return false;
-    }
-
-    // Also check if mission waypoint has been received.
-    if (!get_mission_waypoint().is_initialized()) {
         return false;
     }
 
@@ -1000,6 +1003,9 @@ void mav_vehicle::takeoff()
 {
     switch (this->autopilot) {
     case autopilot_type::PX4:
+        if (this->get_arm_status() != arm_status::ARMED) {
+            this->arm_throttle();
+        }
         if (this->get_status() != status::ACTIVE) {
             this->set_mode(mode::TAKEOFF);
         }
