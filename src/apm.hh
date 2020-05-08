@@ -16,6 +16,14 @@
 
 #pragma once
 
+/**
+ * @file
+ * @brief Ardupilot Mega specific definitions
+ */
+
+/**
+ * @brief APM custom modes
+ */
 enum APM_CUSTOM_MODE {
     APM_CUSTOM_MODE_GUIDED = 4,
     APM_CUSTOM_MODE_AUTO = 3,

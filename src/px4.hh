@@ -42,6 +42,14 @@
 
 #include <stdint.h>
 
+/**
+ * @file
+ * @brief PX4 specific defintions
+ */
+
+/**
+ * @brief PX4 custom main modes
+ */
 enum PX4_CUSTOM_MAIN_MODE {
 	PX4_CUSTOM_MAIN_MODE_MANUAL = 1,
 	PX4_CUSTOM_MAIN_MODE_ALTCTL,
@@ -53,6 +61,9 @@ enum PX4_CUSTOM_MAIN_MODE {
 	PX4_CUSTOM_MAIN_MODE_RATTITUDE
 };
 
+/**
+ * @brief PX4 available submodes for custom auto mode
+ */
 enum PX4_CUSTOM_SUB_MODE_AUTO {
 	PX4_CUSTOM_SUB_MODE_AUTO_READY = 1,
 	PX4_CUSTOM_SUB_MODE_AUTO_TAKEOFF,
@@ -64,6 +75,9 @@ enum PX4_CUSTOM_SUB_MODE_AUTO {
 	PX4_CUSTOM_SUB_MODE_AUTO_FOLLOW_TARGET
 };
 
+/**
+ * @brief PX4 custom mode data type
+ */
 union px4_custom_mode {
 	struct {
 		uint16_t reserved;
